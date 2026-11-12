@@ -89,6 +89,7 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   <!-- MODUS 1 -->
   <div class="card mode-sil">
     <h2>Silhouet van het voorpaneel</h2>
+    <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="sil-sym"> Symmetrisch: teken de rechterhelft, de linkerhelft wordt gespiegeld</label>
     <canvas id="editor"></canvas>
     <p class="hint">Tik op een lege plek: punt achteraan toevoegen. Tik vlak bij een rand: punt in die rand invoegen. Sleep een punt om het te verplaatsen. Alles snapt op 0,5 cm. y = 0 is de onderkant.</p>
     <div class="btns">
@@ -99,7 +100,7 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
     <h3>Punten</h3>
     <div class="tablewrap"><table id="pt-table"></table></div>
     <div class="btns"><button class="b" id="pt-add">+ punt</button></div>
-    <p class="hint">“Open” geldt voor de rand van dit punt naar het volgende. Open randen krijgen geen zijstrook.</p>
+    <p class="hint" id="pt-hint"></p>
     <h3>Vaas</h3>
     <div class="row">
       <label class="f">Diepte (cm)<input type="text" inputmode="decimal" class="num" id="sil-depth"></label>
@@ -110,6 +111,7 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   <!-- MODUS 2 -->
   <div class="card mode-sec">
     <h2>Niveaus (van onder naar boven)</h2>
+    <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="sec-sym"> Symmetrisch: links = rechts (geen verschuiving in x)</label>
     <div id="levels"></div>
     <div class="btns">
       <button class="b" id="lv-add">+ niveau</button>
@@ -270,7 +272,7 @@ const Geo = (() => {
       return { loop, edges, pieces, folds, length: pos, startVertex: edges[0], endVertex: (edges[edges.length - 1] + 1) % n,
         closeAngle: loop ? angles[edges[0]] : null };
     };
-    if (open.every(o => !o)) runs.push(makeRun(pts.map((_, i) => i), true));
+    if (open.every(o => !o)) { runs.push(makeRun(pts.map((_, i) => i), true)); warnings.push('Alle randen zijn gesloten: de vaas heeft geen opening. Vink minstens één rand als open aan.'); }
     else if (open.every(o => o)) warnings.push('Alle randen zijn open: er is geen zijstrook.');
     else {
       for (let i = 0; i < n; i++) {
@@ -358,8 +360,50 @@ const Geo = (() => {
     return { s, t: st.t || 0, levels: L, N, columns, bottom, warnings };
   }
 
+  /* ---------- Symmetrie: halve vorm (rechts van de as) <-> volledige veelhoek ---------- */
+  // sym = { axis, half: [[x,y],...] van onder naar boven, hopen: [open per halve rand], top, bottom }
+  function symExpand(sym) {
+    const a = sym.axis || 0, H = sym.half || [], n = H.length;
+    const mir = p => [2 * a - p[0], p[1]], onAxis = p => Math.abs(p[0] - a) < 1e-9;
+    const pts = [], map = [];
+    H.forEach((p, i) => { pts.push([p[0], p[1]]); map.push({ h: i, mir: false }); });
+    for (let i = n - 1; i >= 0; i--) {
+      if ((i === n - 1 || i === 0) && onAxis(H[i])) continue;
+      pts.push(mir(H[i])); map.push({ h: i, mir: true });
+    }
+    const edges = [], open = [];
+    for (let j = 0; j < pts.length; j++) {
+      const A = map[j], B = map[(j + 1) % pts.length];
+      let e;
+      if (Math.abs(A.h - B.h) === 1) e = { type: 'half', i: Math.min(A.h, B.h), mir: A.mir || B.mir };
+      else e = { type: A.mir ? 'bottom' : 'top' };
+      edges.push(e);
+      open.push(e.type === 'half' ? !!(sym.hopen || [])[e.i] : !!sym[e.type]);
+    }
+    return { pts, open, map, edges };
+  }
+  function toHalf(pts, open, axis) {
+    const n = pts.length;
+    let P = pts.map(p => [p[0], p[1]]), O = open.map(Boolean);
+    if (!isCCW(P)) { P = P.reverse(); O = P.map((_, i) => !!open[((n - 2 - i) % n + n) % n]); }
+    const right = P.map(p => p[0] >= axis - 1e-9);
+    if (right.every(Boolean) || !right.some(Boolean)) return null;
+    let best = null;
+    for (let s = 0; s < n; s++) {
+      if (!right[s] || right[(s - 1 + n) % n]) continue;
+      const run = []; let j = s;
+      while (right[j] && run.length < n) { run.push(j); j = (j + 1) % n; }
+      if (!best || run.length > best.length) best = run;
+    }
+    if (!best || best.length < 2) return null;
+    return {
+      axis, half: best.map(i => [P[i][0], P[i][1]]), hopen: best.slice(0, -1).map(i => O[i]),
+      top: O[best[best.length - 1]], bottom: O[(best[0] - 1 + n) % n],
+    };
+  }
+
   return { DEG, sub, add, mul, dot, len, unit, signedArea, isCCW, edgeLengths, edgeNormal, interiorAngles,
-    inwardBisector, offsetPolygon, selfIntersects, shrinkFactor, silhouette, sections, sectionPolygon };
+    inwardBisector, offsetPolygon, selfIntersects, shrinkFactor, silhouette, sections, sectionPolygon, symExpand, toHalf };
 })();
 /*GEO-END*/
 </script>
@@ -385,8 +429,9 @@ function defaults() {
   return {
     mode: 'silhouet',
     settings: { krimp: 12, t: 0.8, ref: 'buiten', marge: false, margeCm: 1 },
-    sil: { pts: PRESETS.trap.pts.map(p => p.slice()), open: PRESETS.trap.open.slice(), depth: 8, pieces: false },
-    sec: { diamRef: 'hoek', levels: [lvl(0, { w: 8, d: 6 }), lvl(15, { w: 14, d: 10 }), lvl(25, { w: 7, d: 5 })] },
+    sil: { pts: PRESETS.trap.pts.map(p => p.slice()), open: PRESETS.trap.open.slice(), depth: 8, pieces: false,
+      sym: { on: false, axis: 0, half: [], hopen: [], top: true, bottom: false } },
+    sec: { diamRef: 'hoek', sym: false, levels: [lvl(0, { w: 8, d: 6 }), lvl(15, { w: 14, d: 10 }), lvl(25, { w: 7, d: 5 })] },
   };
 }
 let state = defaults();
@@ -395,6 +440,7 @@ function loadState(obj) {
   const st = Object.assign(d, obj || {});
   st.settings = Object.assign(defaults().settings, (obj || {}).settings || {});
   st.sil = Object.assign(defaults().sil, (obj || {}).sil || {});
+  st.sil.sym = Object.assign(defaults().sil.sym, ((obj || {}).sil || {}).sym || {});
   st.sec = Object.assign(defaults().sec, (obj || {}).sec || {});
   st.sec.levels = st.sec.levels.map(l => lvl(l.z, l));
   while (st.sil.open.length < st.sil.pts.length) st.sil.open.push(false);
@@ -736,7 +782,9 @@ function report(r) {
   const head = `Krimp ${f1(num(st.krimp))} % (maten × ${s.toFixed(4).replace('.', ',')}) · slabdikte ${f2(num(st.t))} cm · invoer = ${st.ref}maat${st.marge ? ' · naadmarge ' + f2(num(st.margeCm)) + ' cm' : ''}`;
   if (state.mode === 'silhouet') {
     const names = r.pts.map((_, i) => 'P' + (i + 1));
-    L.push('SLAB-VAAS · SILHOUETVAAS', head, 'Alle maten in cm, op natte (ongebakken) maat.', '');
+    L.push('SLAB-VAAS · SILHOUETVAAS', head, 'Alle maten in cm, op natte (ongebakken) maat.');
+    if (symOn()) L.push(`Symmetrisch rond de as x = 0 · P1–P${state.sil.sym.half.length} = rechterhelft, de rest is gespiegeld.`);
+    L.push('');
     L.push('VOOR- EN ACHTERPANEEL (2×, achterpaneel gespiegeld)');
     L.push('punt      x       y     hoek');
     r.pts.forEach((p, i) => L.push(`${names[i].padEnd(5)} ${f2(p[0]).padStart(6)}  ${f2(p[1]).padStart(6)}   ${f1(r.angles[i]).padStart(5)}°${r.angles[i] > 180 ? ' (hol)' : ''}`));
@@ -751,7 +799,9 @@ function report(r) {
       if (state.sil.pieces) L.push('   losse stukken: verstek per uiteinde = (180° − hoek) / 2');
     });
   } else {
-    L.push('SLAB-VAAS · FACETVAAS (gestapelde doorsneden)', head, 'Alle maten in cm, op natte (ongebakken) maat.', '');
+    L.push('SLAB-VAAS · FACETVAAS (gestapelde doorsneden)', head, 'Alle maten in cm, op natte (ongebakken) maat.');
+    if (state.sec.sym) L.push('Symmetrisch: links = rechts (geen x-verschuiving).');
+    L.push('');
     L.push('NIVEAUS: ' + r.levels.map(l => 'z ' + f2(l.z)).join(' · '), '');
     r.columns.forEach(c => {
       L.push(`MAL KOLOM ${c.label}${c.name ? ' (' + c.name + ')' : ''}`);
@@ -780,7 +830,7 @@ function compute() {
   if (state.mode === 'silhouet') {
     return Geo.silhouette({ pts: state.sil.pts, open: state.sil.open, depth: num(state.sil.depth) }, st);
   }
-  const levels = state.sec.levels.map(l => ({ z: num(l.z), type: l.type, w: num(l.w), d: num(l.d), n: num(l.n, 6), diam: num(l.diam), dx: num(l.dx), dy: num(l.dy) }));
+  const levels = state.sec.levels.map(l => ({ z: num(l.z), type: l.type, w: num(l.w), d: num(l.d), n: num(l.n, 6), diam: num(l.diam), dx: state.sec.sym ? 0 : num(l.dx), dy: num(l.dy) }));
   return Geo.sections({ levels, diamRef: state.sec.diamRef }, st);
 }
 
@@ -921,11 +971,44 @@ function draw3d() {
 })();
 
 /* ================= Modus 1: editor ================= */
-const ed = { view: null, drag: -1, sel: -1, down: null, moved: false };
+// Niet-symmetrisch: ed.sel / ed.drag = index in state.sil.pts.
+// Symmetrisch: state.sil.sym.half is de bron (rechterhelft, x >= 0); ed.sel = index in half,
+// ed.drag = {h, mir}; state.sil.pts/open worden er telkens uit afgeleid (symApply).
+const ed = { view: null, drag: null, sel: -1, down: null, moved: false, map: null, edges: null };
 const snap = v => Math.round(v * 2) / 2;
+const symOn = () => !!(state.sil.sym && state.sil.sym.on);
+const mirX = p => [-p[0], p[1]];
+const DEFAULT_HALF = { half: [[6, 0], [15, 18]], hopen: [false], top: true, bottom: false };
+function symApply() {
+  if (!symOn()) { ed.map = null; ed.edges = null; return; }
+  const S = state.sil.sym;
+  S.axis = 0;
+  S.half = S.half.map(p => [Math.max(0, p[0]), p[1]]);
+  while (S.hopen.length < S.half.length - 1) S.hopen.push(false);
+  S.hopen.length = Math.max(0, S.half.length - 1);
+  const ex = Geo.symExpand(S);
+  state.sil.pts = ex.pts; state.sil.open = ex.open; ed.map = ex.map; ed.edges = ex.edges;
+}
+/** Zet symmetrie aan/uit. Bij aanzetten wordt de huidige vorm gecentreerd en de rechterhelft overgenomen. */
+function symEnable(on) {
+  const sil = state.sil;
+  if (on) {
+    let h = null;
+    if (sil.pts.length >= 3) {
+      const xs = sil.pts.map(p => p[0]), c = snap((Math.min(...xs) + Math.max(...xs)) / 2);
+      h = Geo.toHalf(sil.pts.map(p => [p[0] - c, p[1]]), sil.open, 0);
+    }
+    Object.assign(sil.sym, JSON.parse(JSON.stringify(h || DEFAULT_HALF)), { on: true, axis: 0 });
+  } else sil.sym.on = false;
+  ed.sel = -1; ed.view = null;
+  symApply();
+}
+const isSel = j => (symOn() ? !!(ed.map && ed.map[j] && ed.map[j].h === ed.sel) : j === ed.sel);
+const tablePts = () => (symOn() ? state.sil.sym.half : state.sil.pts);
+
 function edFit() {
   const cv = $('editor'), pts = state.sil.pts;
-  const xs = pts.map(p => p[0]).concat([0, 20]), ys = pts.map(p => p[1]).concat([0, 20]);
+  const xs = pts.map(p => p[0]).concat(symOn() ? [-10, 10] : [0, 20]), ys = pts.map(p => p[1]).concat([0, 20]);
   let x0 = Math.min(...xs) - 3, x1 = Math.max(...xs) + 3, y0 = Math.min(...ys) - 3, y1 = Math.max(...ys) + 3;
   const w = cv.clientWidth, h = cv.clientHeight;
   const sc = Math.min(w / (x1 - x0), h / (y1 - y0));
@@ -935,26 +1018,31 @@ const toS = p => [ed.view.ox + p[0] * ed.view.sc, ed.view.oy - p[1] * ed.view.sc
 const toW = (x, y) => [(x - ed.view.ox) / ed.view.sc, (ed.view.oy - y) / ed.view.sc];
 function edDraw() {
   const cv = $('editor'), dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (!w) return;
   if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
   if (!ed.view) edFit();
   const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
   const [wx0, wy1] = toW(0, 0), [wx1, wy0] = toW(w, h);
-  for (let x = Math.ceil(wx0 * 2) / 2; x <= wx1; x += 0.5) {
-    const major = Math.abs(x % 5) < 1e-9, unitL = Math.abs(x % 1) < 1e-9;
-    if (!unitL && ed.view.sc < 14) continue;
-    g.strokeStyle = major ? '#d8c9b6' : unitL ? '#eee5d9' : '#f6f0e8'; g.lineWidth = 1;
-    const X = Math.round(toS([x, 0])[0]) + 0.5; g.beginPath(); g.moveTo(X, 0); g.lineTo(X, h); g.stroke();
-    if (major) { g.fillStyle = '#a89886'; g.font = '10px system-ui'; g.fillText(String(x), X + 2, h - 4); }
-  }
-  for (let y = Math.ceil(wy0 * 2) / 2; y <= wy1; y += 0.5) {
-    const major = Math.abs(y % 5) < 1e-9, unitL = Math.abs(y % 1) < 1e-9;
-    if (!unitL && ed.view.sc < 14) continue;
-    g.strokeStyle = major ? '#d8c9b6' : unitL ? '#eee5d9' : '#f6f0e8'; g.lineWidth = 1;
-    const Y = Math.round(toS([0, y])[1]) + 0.5; g.beginPath(); g.moveTo(0, Y); g.lineTo(w, Y); g.stroke();
-    if (major) { g.fillStyle = '#a89886'; g.font = '10px system-ui'; g.fillText(String(y), 3, Y - 3); }
-  }
+  const grid = (v0, v1, line, lab) => {
+    for (let v = Math.ceil(v0 * 2) / 2; v <= v1; v += 0.5) {
+      const major = Math.abs(v % 5) < 1e-9, unitL = Math.abs(v % 1) < 1e-9;
+      if (!unitL && ed.view.sc < 14) continue;
+      g.strokeStyle = major ? '#d8c9b6' : unitL ? '#eee5d9' : '#f6f0e8'; g.lineWidth = 1;
+      line(v); if (major) lab(v);
+    }
+  };
+  g.font = '10px system-ui'; g.fillStyle = '#a89886';
+  grid(wx0, wx1, x => { const X = Math.round(toS([x, 0])[0]) + 0.5; g.beginPath(); g.moveTo(X, 0); g.lineTo(X, h); g.stroke(); },
+    x => g.fillText(String(x), toS([x, 0])[0] + 2, h - 4));
+  grid(wy0, wy1, y => { const Y = Math.round(toS([0, y])[1]) + 0.5; g.beginPath(); g.moveTo(0, Y); g.lineTo(w, Y); g.stroke(); },
+    y => g.fillText(String(y), 3, toS([0, y])[1] - 3));
   g.strokeStyle = '#b5a48f'; g.lineWidth = 1.5;
   const o = toS([0, 0]); g.beginPath(); g.moveTo(0, o[1]); g.lineTo(w, o[1]); g.stroke();
+  if (symOn()) {
+    g.strokeStyle = '#b5653c'; g.lineWidth = 1.5; g.setLineDash([8, 4, 2, 4]);
+    g.beginPath(); g.moveTo(o[0], 0); g.lineTo(o[0], h); g.stroke(); g.setLineDash([]);
+    g.fillStyle = '#b5653c'; g.font = '600 11px system-ui'; g.textAlign = 'left'; g.fillText('spiegelas', o[0] + 5, 14);
+  }
   const pts = state.sil.pts, n = pts.length;
   if (n >= 3) {
     g.beginPath(); pts.forEach((p, i) => { const s = toS(p); i ? g.lineTo(...s) : g.moveTo(...s); }); g.closePath();
@@ -963,17 +1051,20 @@ function edDraw() {
   for (let i = 0; i < n; i++) {
     if (n < 2 || (n === 2 && i === 1)) break;
     const a = toS(pts[i]), b = toS(pts[(i + 1) % n]), op = state.sil.open[i];
+    const ghost = symOn() && ed.edges && ed.edges[i].type === 'half' && ed.edges[i].mir;
     g.beginPath(); g.moveTo(...a); g.lineTo(...b);
-    g.strokeStyle = op ? '#a89886' : '#2a2420'; g.lineWidth = op ? 1.5 : 2.2; g.setLineDash(op ? [6, 5] : []); g.stroke(); g.setLineDash([]);
+    g.strokeStyle = op ? '#a89886' : ghost ? '#8c7b6c' : '#2a2420'; g.lineWidth = op ? 1.5 : 2.2; g.setLineDash(op ? [6, 5] : []); g.stroke(); g.setLineDash([]);
+    if (ghost) continue;
     const L = Math.hypot(pts[(i + 1) % n][0] - pts[i][0], pts[(i + 1) % n][1] - pts[i][1]);
     g.fillStyle = op ? '#a89886' : '#7a6e64'; g.font = '11px system-ui'; g.textAlign = 'center';
     g.fillText(f2(L) + (op ? ' open' : ''), (a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 6);
   }
   pts.forEach((p, i) => {
-    const s = toS(p);
-    g.beginPath(); g.arc(s[0], s[1], i === ed.sel ? 7 : 5, 0, Math.PI * 2);
-    g.fillStyle = i === ed.sel ? '#b5653c' : '#fff'; g.fill(); g.strokeStyle = '#b5653c'; g.lineWidth = 2; g.stroke();
-    g.fillStyle = '#2a2420'; g.font = '600 11px system-ui'; g.textAlign = 'left'; g.fillText('P' + (i + 1), s[0] + 8, s[1] - 8);
+    const s = toS(p), ghost = symOn() && ed.map && ed.map[i].mir, sel = isSel(i);
+    g.beginPath(); g.arc(s[0], s[1], sel ? 7 : ghost ? 4 : 5, 0, Math.PI * 2);
+    g.fillStyle = sel ? (ghost ? '#e3b79d' : '#b5653c') : ghost ? '#f3e6dc' : '#fff'; g.fill();
+    g.strokeStyle = ghost ? '#c9a48c' : '#b5653c'; g.lineWidth = 2; g.stroke();
+    if (!ghost) { g.fillStyle = '#2a2420'; g.font = '600 11px system-ui'; g.textAlign = 'left'; g.fillText('P' + (i + 1), s[0] + 8, s[1] - 8); }
   });
 }
 function edPointer() {
@@ -981,29 +1072,42 @@ function edPointer() {
   const pos = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   cv.addEventListener('pointerdown', e => {
     const [x, y] = pos(e);
-    ed.down = [x, y]; ed.moved = false; ed.drag = -1;
-    state.sil.pts.forEach((p, i) => { const s = toS(p); if (Math.hypot(s[0] - x, s[1] - y) < 16 && ed.drag < 0) ed.drag = i; });
-    if (ed.drag >= 0) { ed.sel = ed.drag; edDraw(); renderPtTable(); }
+    ed.down = [x, y]; ed.moved = false; ed.drag = null;
+    let best = -1, bd = 16;
+    state.sil.pts.forEach((p, i) => {
+      const s = toS(p), d = Math.hypot(s[0] - x, s[1] - y);
+      // bij gelijke afstand (punt op de as) wint het echte punt boven de spiegeling
+      if (d < bd || (d === bd && best >= 0 && symOn() && ed.map[best].mir)) { bd = d; best = i; }
+    });
+    if (best >= 0) {
+      if (symOn()) { ed.drag = { h: ed.map[best].h, mir: ed.map[best].mir }; ed.sel = ed.drag.h; }
+      else { ed.drag = best; ed.sel = best; }
+      edDraw(); renderPtTable();
+    }
     cv.setPointerCapture(e.pointerId);
   });
   let raf = 0;
+  const redraw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; edDraw(); syncPtTableValues(); update(); }); };
   cv.addEventListener('pointermove', e => {
     if (!ed.down) return;
     const [x, y] = pos(e);
     if (Math.hypot(x - ed.down[0], y - ed.down[1]) > 4) ed.moved = true;
-    if (ed.drag >= 0 && ed.moved) {
-      const w = toW(x, y).map(snap);
+    if (ed.drag === null || !ed.moved) return;
+    let w = toW(x, y).map(snap);
+    if (symOn()) {
+      if (ed.drag.mir) w = mirX(w);
+      w = [Math.max(0, w[0]), w[1]];
+      const H = state.sil.sym.half, p = H[ed.drag.h];
+      if (p[0] !== w[0] || p[1] !== w[1]) { H[ed.drag.h] = w; symApply(); redraw(); }
+    } else {
       const p = state.sil.pts[ed.drag];
-      if (p[0] !== w[0] || p[1] !== w[1]) {
-        state.sil.pts[ed.drag] = w;
-        if (!raf) raf = requestAnimationFrame(() => { raf = 0; edDraw(); syncPtTableValues(); update(); });
-      }
+      if (p[0] !== w[0] || p[1] !== w[1]) { state.sil.pts[ed.drag] = w; redraw(); }
     }
   });
   const end = e => {
     if (!ed.down) return;
     const [x, y] = pos(e);
-    if (!ed.moved && ed.drag < 0) {
+    if (!ed.moved && ed.drag === null) {
       const w = toW(x, y).map(snap), pts = state.sil.pts, n = pts.length;
       let best = -1, bd = 12;
       for (let i = 0; i < n && n >= 3; i++) {
@@ -1013,34 +1117,52 @@ function edPointer() {
         const d = Math.hypot(a[0] + ab[0] * t - x, a[1] + ab[1] * t - y);
         if (d < bd && t > 0.05 && t < 0.95) { bd = d; best = i; }
       }
-      if (best >= 0) { pts.splice(best + 1, 0, w); state.sil.open.splice(best + 1, 0, state.sil.open[best]); ed.sel = best + 1; }
+      if (symOn()) {
+        const S = state.sil.sym, wr = w[0] < 0 ? mirX(w) : w;
+        const e2 = best >= 0 ? ed.edges[best] : { type: 'top' };
+        if (e2.type === 'half') { S.half.splice(e2.i + 1, 0, wr); S.hopen.splice(e2.i + 1, 0, S.hopen[e2.i]); ed.sel = e2.i + 1; }
+        else if (e2.type === 'bottom') { S.half.unshift(wr); S.hopen.unshift(false); ed.sel = 0; }
+        else { S.half.push(wr); S.hopen.push(false); ed.sel = S.half.length - 1; }
+        symApply();
+      } else if (best >= 0) { pts.splice(best + 1, 0, w); state.sil.open.splice(best + 1, 0, state.sil.open[best]); ed.sel = best + 1; }
       else {
         const lastOpen = state.sil.open[n - 1] || false;
         if (n > 0) state.sil.open[n - 1] = false;
         pts.push(w); state.sil.open.push(lastOpen); ed.sel = pts.length - 1;
       }
     }
-    ed.down = null; ed.drag = -1;
+    ed.down = null; ed.drag = null;
     edFit(); edDraw(); renderPtTable(); update();
   };
   cv.addEventListener('pointerup', end);
   cv.addEventListener('pointercancel', end);
 }
 function renderPtTable() {
-  const tb = $('pt-table'), s = state.sil;
-  let h = '<tr><th>#</th><th>x (cm)</th><th>y (cm)</th><th>rand open</th><th></th></tr>';
-  s.pts.forEach((p, i) => {
+  const tb = $('pt-table'), s = state.sil, sym = symOn(), pts = tablePts(), n = pts.length;
+  const v = x => String(x).replace('.', ',');
+  let h = `<tr><th>#</th><th>${sym ? 'x vanaf as' : 'x (cm)'}</th><th>y (cm)</th><th>rand open</th><th></th></tr>`;
+  pts.forEach((p, i) => {
+    const op = sym ? s.sym.hopen[i] : s.open[i], hasEdge = !sym || i < n - 1, nxt = sym ? i + 2 : (i + 1) % n + 1;
     h += `<tr class="${i === ed.sel ? 'sel' : ''}" data-i="${i}"><td>P${i + 1}</td>
-      <td><input type="text" inputmode="decimal" data-f="x" value="${String(p[0]).replace('.', ',')}"></td>
-      <td><input type="text" inputmode="decimal" data-f="y" value="${String(p[1]).replace('.', ',')}"></td>
-      <td><label class="chk"><input type="checkbox" data-f="open"${s.open[i] ? ' checked' : ''}> P${i + 1}→P${(i + 1) % s.pts.length + 1}</label></td>
+      <td><input type="text" inputmode="decimal" data-f="x" value="${v(p[0])}"></td>
+      <td><input type="text" inputmode="decimal" data-f="y" value="${v(p[1])}"></td>
+      <td>${hasEdge ? `<label class="chk"><input type="checkbox" data-f="open"${op ? ' checked' : ''}> P${i + 1}→P${nxt}</label>` : ''}</td>
       <td><button class="x" data-f="del" title="verwijderen">×</button></td></tr>`;
   });
+  if (sym) {
+    const types = new Set((ed.edges || []).map(e => e.type));
+    if (types.has('top')) h += `<tr><td colspan="3">bovenrand over de as</td><td><label class="chk"><input type="checkbox" data-f="top"${s.sym.top ? ' checked' : ''}> open</label></td><td></td></tr>`;
+    if (types.has('bottom')) h += `<tr><td colspan="3">onderrand over de as</td><td><label class="chk"><input type="checkbox" data-f="bottom"${s.sym.bottom ? ' checked' : ''}> open</label></td><td></td></tr>`;
+  }
   tb.innerHTML = h;
+  $('pt-hint').textContent = sym
+    ? 'Symmetrisch: je bewerkt de rechterhelft (x ≥ 0, van onder naar boven). De linkerhelft wordt gespiegeld. Een punt met x = 0 ligt op de as. “Open” geldt voor de rand naar het volgende punt; open randen krijgen geen zijstrook.'
+    : '“Open” geldt voor de rand van dit punt naar het volgende. Open randen krijgen geen zijstrook.';
 }
 function syncPtTableValues() {
+  const pts = tablePts();
   $('pt-table').querySelectorAll('tr[data-i]').forEach(tr => {
-    const i = +tr.dataset.i, p = state.sil.pts[i]; if (!p) return;
+    const i = +tr.dataset.i, p = pts[i]; if (!p) return;
     const ix = tr.querySelector('[data-f=x]'), iy = tr.querySelector('[data-f=y]');
     if (document.activeElement !== ix) ix.value = String(p[0]).replace('.', ',');
     if (document.activeElement !== iy) iy.value = String(p[1]).replace('.', ',');
@@ -1048,13 +1170,23 @@ function syncPtTableValues() {
   });
 }
 function deletePoint(i) {
-  if (i < 0 || i >= state.sil.pts.length) return;
-  state.sil.pts.splice(i, 1);
-  const n = state.sil.open.length;
-  // merge the two edges around the removed point: keep "open" if either was open
-  const prev = (i - 1 + n) % n, merged = state.sil.open[prev] || state.sil.open[i];
-  state.sil.open.splice(i, 1);
-  if (state.sil.open.length) state.sil.open[(i - 1 + state.sil.open.length) % state.sil.open.length] = merged;
+  if (symOn()) {
+    const S = state.sil.sym, n = S.half.length;
+    if (i < 0 || i >= n) return;
+    if (i === 0) S.hopen.splice(0, 1);
+    else if (i === n - 1) S.hopen.splice(n - 2, 1);
+    else { const merged = S.hopen[i - 1] || S.hopen[i]; S.hopen.splice(i, 1); S.hopen[i - 1] = merged; }
+    S.half.splice(i, 1);
+    symApply();
+  } else {
+    if (i < 0 || i >= state.sil.pts.length) return;
+    state.sil.pts.splice(i, 1);
+    const n = state.sil.open.length;
+    // de twee randen rond het verwijderde punt worden één rand: open als één van beide open was
+    const prev = (i - 1 + n) % n, merged = state.sil.open[prev] || state.sil.open[i];
+    state.sil.open.splice(i, 1);
+    if (state.sil.open.length) state.sil.open[(i - 1 + state.sil.open.length) % state.sil.open.length] = merged;
+  }
   ed.sel = -1; edFit(); edDraw(); renderPtTable(); update();
 }
 
@@ -1073,7 +1205,7 @@ function renderLevels() {
            <label class="f">diepte<input type="text" inputmode="decimal" class="sm" data-f="d" value="${v(l.d)}"></label>`
         : `<label class="f">n<input type="text" inputmode="numeric" class="sm" data-f="n" value="${v(l.n)}"></label>
            <label class="f">diameter<input type="text" inputmode="decimal" class="sm" data-f="diam" value="${v(l.diam)}"></label>`}
-      <label class="f">verschuiving x<input type="text" inputmode="decimal" class="sm" data-f="dx" value="${v(l.dx)}"></label>
+      <label class="f">verschuiving x<input type="text" inputmode="decimal" class="sm" data-f="dx" value="${state.sec.sym ? 0 : v(l.dx)}"${state.sec.sym ? ' disabled' : ''}></label>
       <label class="f">y<input type="text" inputmode="decimal" class="sm" data-f="dy" value="${v(l.dy)}"></label>
       <button class="x" data-f="del" title="verwijderen">×</button>`;
     box.appendChild(d);
@@ -1144,8 +1276,10 @@ function syncInputs() {
   $('sil-depth').value = String(state.sil.depth).replace('.', ',');
   $('sil-pieces').checked = !!state.sil.pieces;
   $('sec-diamref').value = state.sec.diamRef;
+  $('sil-sym').checked = symOn();
+  $('sec-sym').checked = !!state.sec.sym;
   setMode(state.mode, true);
-  renderPtTable(); renderLevels(); ed.view = null; ed.sel = -1;
+  ed.view = null; ed.sel = -1; symApply(); renderPtTable(); renderLevels();
 }
 function setMode(m, silent) {
   state.mode = m;
@@ -1167,6 +1301,8 @@ function init() {
   bind('sil-depth', el => { state.sil.depth = el.value; });
   bind('sil-pieces', el => { state.sil.pieces = el.checked; }, 'change');
   bind('sec-diamref', el => { state.sec.diamRef = el.value; }, 'change');
+  bind('sec-sym', el => { state.sec.sym = el.checked; renderLevels(); }, 'change');
+  bind('sil-sym', el => { symEnable(el.checked); edDraw(); renderPtTable(); }, 'change');
 
   const tb = $('pt-table');
   tb.addEventListener('input', e => {
@@ -1175,13 +1311,19 @@ function init() {
     if (f === 'x' || f === 'y') {
       const v = parseFloat(e.target.value.replace(',', '.'));
       if (!isFinite(v)) return;
-      state.sil.pts[i][f === 'x' ? 0 : 1] = v; edDraw(); update();
+      const p = tablePts()[i]; if (!p) return;
+      p[f === 'x' ? 0 : 1] = v; symApply(); edDraw(); update();
     }
   });
   tb.addEventListener('change', e => {
+    const f = e.target.dataset.f;
+    if (f === 'top' || f === 'bottom') { state.sil.sym[f] = e.target.checked; symApply(); edDraw(); update(); return; }
     const tr = e.target.closest('tr[data-i]'); if (!tr) return;
-    if (e.target.dataset.f === 'open') { state.sil.open[+tr.dataset.i] = e.target.checked; edDraw(); update(); }
-    if (e.target.dataset.f === 'x' || e.target.dataset.f === 'y') { ed.view = null; edDraw(); }
+    if (f === 'open') {
+      if (symOn()) state.sil.sym.hopen[+tr.dataset.i] = e.target.checked; else state.sil.open[+tr.dataset.i] = e.target.checked;
+      symApply(); edDraw(); update();
+    }
+    if (f === 'x' || f === 'y') { symApply(); ed.view = null; edDraw(); renderPtTable(); update(); }
   });
   tb.addEventListener('click', e => {
     const tr = e.target.closest('tr[data-i]'); if (!tr) return;
@@ -1189,6 +1331,11 @@ function init() {
     else if (e.target.tagName !== 'INPUT') { ed.sel = +tr.dataset.i; edDraw(); syncPtTableValues(); }
   });
   $('pt-add').addEventListener('click', () => {
+    if (symOn()) {
+      const S = state.sil.sym, last = S.half[S.half.length - 1] || [5, 0];
+      S.half.push([last[0], last[1] + 2]); S.hopen.push(false); symApply();
+      ed.sel = S.half.length - 1; ed.view = null; edDraw(); renderPtTable(); update(); return;
+    }
     const pts = state.sil.pts, last = pts[pts.length - 1] || [0, 0];
     const n = pts.length, lastOpen = state.sil.open[n - 1] || false;
     if (n) state.sil.open[n - 1] = false;
@@ -1198,11 +1345,12 @@ function init() {
   $('pt-del').addEventListener('click', () => deletePoint(ed.sel));
   $('pt-clear').addEventListener('click', () => {
     if (!confirm('Alle punten wissen?')) return;
-    state.sil.pts = []; state.sil.open = []; ed.sel = -1; ed.view = null; edDraw(); renderPtTable(); update();
+    state.sil.pts = []; state.sil.open = []; if (symOn()) { state.sil.sym.half = []; state.sil.sym.hopen = []; symApply(); } ed.sel = -1; ed.view = null; edDraw(); renderPtTable(); update();
   });
   $('preset').addEventListener('change', e => {
     const p = PRESETS[e.target.value]; e.target.value = ''; if (!p) return;
     state.sil.pts = p.pts.map(q => q.slice()); state.sil.open = p.open.slice();
+    if (symOn()) symEnable(true);
     ed.sel = -1; ed.view = null; edDraw(); renderPtTable(); update();
   });
   $('lv-add').addEventListener('click', () => {

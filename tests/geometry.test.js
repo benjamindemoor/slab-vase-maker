@@ -117,5 +117,35 @@ test('zeshoek met diameter 10: zijde 5', () => {
   near(h.columns[0].rightSeam[0].bevel, 30, 'afschuinhoek', 1e-6);
 });
 
+console.log('\nSymmetrie');
+test('halve trapezium gespiegeld = volledig trapezium (20,12 · 30 open · 20,12 · 12)', () => {
+  const ex = Geo.symExpand({ axis: 0, half: [[6, 0], [15, 18]], hopen: [false], top: true, bottom: false });
+  assert.strictEqual(ex.pts.length, 4);
+  const L = Geo.edgeLengths(ex.pts);
+  near(L[0], 20.12, 'rechts'); near(L[1], 30, 'boven'); near(L[2], 20.12, 'links'); near(L[3], 12, 'onder');
+  assert.deepStrictEqual(ex.open, [false, true, false, false]);
+  const r = Geo.silhouette({ pts: ex.pts, open: ex.open, depth: 8 }, Object.assign({}, noShrink, { t: 0.8 }));
+  near(r.closedLen, 52.25, 'zijstrook'); near(r.stripWidth, 6.4, 'breedte', 1e-9);
+});
+test('punt op de as wordt niet verdubbeld', () => {
+  const ex = Geo.symExpand({ axis: 0, half: [[0, 0], [5, 0], [5, 10], [0, 12]], hopen: [false, false, false] });
+  assert.strictEqual(ex.pts.length, 6);
+  assert.ok(ex.edges.every(e => e.type === 'half'));
+});
+test('gespiegelde vorm is echt symmetrisch (hoeken links = rechts)', () => {
+  const ex = Geo.symExpand({ axis: 0, half: [[6, 0], [9, 12], [4, 18], [3, 27]], hopen: [false, false, false], top: true });
+  const a = Geo.interiorAngles(ex.pts), n = a.length;
+  for (let i = 0; i < 4; i++) near(a[i], a[n - 1 - i], 'hoek P' + (i + 1), 1e-9);
+});
+test('toHalf haalt de rechterhelft uit een volledige vorm (heen en terug)', () => {
+  const pts = [[-6, 0], [6, 0], [15, 18], [-15, 18]], open = [false, false, true, false];
+  const h = Geo.toHalf(pts, open, 0);
+  assert.deepStrictEqual(h.half, [[6, 0], [15, 18]]);
+  assert.deepStrictEqual(h.hopen, [false]);
+  assert.strictEqual(h.top, true); assert.strictEqual(h.bottom, false);
+  const back = Geo.symExpand(h);
+  near(Geo.edgeLengths(back.pts).reduce((x, y) => x + y, 0), Geo.edgeLengths(pts).reduce((x, y) => x + y, 0), 'omtrek', 1e-9);
+});
+
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);
 process.exit(failed ? 1 : 0);

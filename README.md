@@ -8,9 +8,10 @@ Je hebt geen server en geen build-stap nodig.
 - **Silhouetvaas**: je tekent het voorpaneel als veelhoek (raster, snapt op 0,5 cm, of via de tabel).
   De app berekent voor- en achterpaneel en een zijstrook (breedte = diepte − 2t) met de vouwlijnen.
   Kies per rand of die open is. Je kunt de strook ook in losse stukken per rand laten tekenen.
+  Met **Symmetrisch** teken je alleen de rechterhelft (x ≥ 0) en wordt de linkerhelft live gespiegeld rond x = 0.
 - **Facetvaas**: je stapelt doorsneden (rechthoek of regelmatige n-hoek, met verschuiving per niveau).
   Per zijde krijg je één mal met kraslijnen, ware hoogtes, knikhoeken en afschuinhoeken van de naden.
-  De app tekent ook de bodemplaat.
+  De app tekent ook de bodemplaat. **Symmetrisch** zet alle x-verschuivingen op 0, zodat links en rechts gelijk zijn.
 
 Instellingen: krimp % (maten × 1/(1 − krimp)), slabdikte, buiten- of binnenmaat en naadmarge.
 
