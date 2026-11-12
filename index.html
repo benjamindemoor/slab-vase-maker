@@ -59,6 +59,7 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 .legend i{display:inline-block;width:22px;height:0;border-top:2px solid var(--ink);vertical-align:middle;margin-right:4px}
 .legend i.s{border-top:2px dashed var(--score)}
 .legend i.m{border-top:2px dashed var(--seam)}
+.legend i.v{border-top:2px dotted #7b3fa0}
 .hide{display:none!important}
 </style>
 </head>
@@ -104,6 +105,8 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
     <h3>Vaas</h3>
     <div class="row">
       <label class="f">Diepte (cm)<input type="text" inputmode="decimal" class="num" id="sil-depth"></label>
+      <label class="f">Naad paneel–zijstrook
+        <select id="sil-joint"><option value="verstek">verstek 45° (beide delen afgeschuind)</option><option value="stomp">stomp (strook tussen de panelen)</option></select></label>
       <label class="chk"><input type="checkbox" id="sil-pieces"> Zijstrook in losse stukken per rand</label>
     </div>
   </div>
@@ -131,7 +134,7 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   </div>
   <div class="card">
     <h2>Mallen</h2>
-    <div class="legend"><span><i></i>snijlijn</span><span><i class="s"></i>kras-/vouwlijn</span><span><i class="m"></i>naadmarge</span></div>
+    <div class="legend"><span><i></i>snijlijn</span><span><i class="s"></i>kras-/vouwlijn</span><span><i class="m"></i>naadmarge</span><span><i class="v"></i>afschuinlijn: hier eindigt de schuine snede aan de andere kant van de plaat</span></div>
     <div class="parts" id="parts"></div>
   </div>
   <div class="card">
@@ -259,18 +262,28 @@ const Geo = (() => {
     if (selfIntersects(pts)) warnings.push('De omtrek snijdt zichzelf: controleer de volgorde van de punten.');
     if (st.ref === 'binnen') { pts = offsetPolygon(pts, open.map(o => (o ? 0 : t))); depth += 2 * t; }
     const lengths = edgeLengths(pts), angles = interiorAngles(pts);
-    const stripWidth = depth - 2 * t;
-    if (stripWidth <= 0) warnings.push('De diepte is te klein voor deze slabdikte.');
+    // stomp: de strook zit tussen de panelen. verstek: paneel en strook worden allebei 45° afgeschuind.
+    const joint = st.joint === 'verstek' ? 'verstek' : 'stomp';
+    const stripWidth = joint === 'verstek' ? depth : depth - 2 * t;
+    if (depth - 2 * t <= 0) warnings.push('De diepte is te klein voor deze slabdikte.');
+    // V-groef om een doorlopende strook te plooien; verstek aan een uiteinde van een strookstuk.
+    const groove = v => { const knik = Math.abs(180 - angles[v]); return { knik, width: 2 * t * Math.tan(knik / 2 / DEG), side: angles[v] < 180 ? 'binnenkant' : 'buitenkant' }; };
+    const endCut = v => { const beta = (180 - angles[v]) / 2; return { vertex: v, beta, inset: t * Math.tan(beta / DEG) }; };
     let closedLen = 0;
     lengths.forEach((l, i) => { if (!open[i]) closedLen += l; });
 
     const runs = [];
     const makeRun = (edges, loop) => {
       let pos = 0;
-      const pieces = edges.map(e => { const p = { edge: e, from: e, to: (e + 1) % n, len: lengths[e], start: pos }; pos += lengths[e]; return p; });
-      const folds = pieces.slice(1).map(p => ({ vertex: p.from, angle: angles[p.from], at: p.start, kind: angles[p.from] < 180 ? 'buitenhoek' : 'binnenhoek' }));
-      return { loop, edges, pieces, folds, length: pos, startVertex: edges[0], endVertex: (edges[edges.length - 1] + 1) % n,
-        closeAngle: loop ? angles[edges[0]] : null };
+      const last = edges.length - 1;
+      const pieces = edges.map((e, k) => {
+        const p = { edge: e, from: e, to: (e + 1) % n, len: lengths[e], start: pos,
+          startCut: loop || k > 0 ? endCut(e) : null, endCut: loop || k < last ? endCut((e + 1) % n) : null };
+        pos += lengths[e]; return p;
+      });
+      const folds = pieces.slice(1).map(p => ({ vertex: p.from, angle: angles[p.from], at: p.start, kind: angles[p.from] < 180 ? 'buitenhoek' : 'binnenhoek', groove: groove(p.from) }));
+      return { loop, edges, pieces, folds, length: pos, startVertex: edges[0], endVertex: (edges[last] + 1) % n,
+        closeAngle: loop ? angles[edges[0]] : null, closeCut: loop ? endCut(edges[0]) : null };
     };
     if (open.every(o => !o)) { runs.push(makeRun(pts.map((_, i) => i), true)); warnings.push('Alle randen zijn gesloten: de vaas heeft geen opening. Vink minstens één rand als open aan.'); }
     else if (open.every(o => o)) warnings.push('Alle randen zijn open: er is geen zijstrook.');
@@ -284,7 +297,9 @@ const Geo = (() => {
       }
     }
     const cut = st.marge ? offsetPolygon(pts, open.map(o => (o ? 0 : st.margeCm || 0))) : null;
-    return { s, t, pts, open, lengths, angles, depth, stripWidth, closedLen, runs, cut, warnings };
+    // verstek: lijn op de binnenkant van het paneel waar de schuine snede eindigt
+    const inner = joint === 'verstek' ? offsetPolygon(pts, open.map(o => (o ? 0 : -t))) : null;
+    return { s, t, joint, pts, open, lengths, angles, depth, stripWidth, closedLen, runs, cut, inner, warnings };
   }
 
   /* ---------- Modus 2: gestapelde doorsneden ---------- */
@@ -342,10 +357,12 @@ const Geo = (() => {
       for (let k = 1; k < m; k++) {
         const knik = Math.acos(clamp1(dot3(segs[k - 1].normal, segs[k].normal))) * DEG;
         const kind = knik < 0.05 ? 'vlak' : (dot3(segs[k].up, segs[k - 1].normal) < 0 ? 'bol' : 'hol');
-        creases.push({ level: k, knik, between: 180 - knik, kind, y: left[k][1] });
+        creases.push({ level: k, knik, between: 180 - knik, kind, y: left[k][1],
+          groove: { width: 2 * (st.t || 0) * Math.tan(knik / 2 / DEG), side: kind === 'hol' ? 'buitenkant' : 'binnenkant' } });
       }
       const baseAngle = 90 + Math.atan2(segs[0].off, segs[0].dz) * DEG;
-      columns.push({ label: String.fromCharCode(65 + i), name: names[i] || '', widths, segs, left, right, creases, baseAngle, height: Y });
+      const baseBevel = (180 - baseAngle) / 2;
+      columns.push({ label: String.fromCharCode(65 + i), name: names[i] || '', widths, segs, left, right, creases, baseAngle, baseBevel, height: Y });
     }
     const seams = [];
     for (let j = 0; j < N; j++) {
@@ -429,7 +446,7 @@ function defaults() {
   return {
     mode: 'silhouet',
     settings: { krimp: 12, t: 0.8, ref: 'buiten', marge: false, margeCm: 1 },
-    sil: { pts: PRESETS.trap.pts.map(p => p.slice()), open: PRESETS.trap.open.slice(), depth: 8, pieces: false,
+    sil: { pts: PRESETS.trap.pts.map(p => p.slice()), open: PRESETS.trap.open.slice(), depth: 8, pieces: false, joint: 'verstek',
       sym: { on: false, axis: 0, half: [], hopen: [], top: true, bottom: false } },
     sec: { diamRef: 'hoek', sym: false, levels: [lvl(0, { w: 8, d: 6 }), lvl(15, { w: 14, d: 10 }), lvl(25, { w: 7, d: 5 })] },
   };
@@ -459,7 +476,7 @@ function persist() {
    {k:'poly', pts, closed, s:'cut'|'score'|'dim'|'seam'}  {k:'text', x, y, t, size(cm), a:'start'|'middle'|'end', rot(deg ccw), title?} */
 const P = (pts, s = 'cut', closed = false) => ({ k: 'poly', pts, s, closed });
 const T = (x, y, t, o = {}) => Object.assign({ k: 'text', x, y, t, size: 0.32, a: 'middle', rot: 0 }, o);
-const readable = e => { let a = Math.atan2(e[1], e[0]) * Geo.DEG; if (a > 90.01) a -= 180; if (a <= -90.01) a += 180; return a; };
+const readable = e => { let a = Math.atan2(e[1], e[0]) * Geo.DEG; if (a > 90.01) a -= 180; if (a <= -89.99) a += 180; return a; };
 
 function dimPrims(p, q, nrm, off, label) {
   const { add, mul, sub, unit } = Geo;
@@ -496,14 +513,22 @@ function makePart(title, prims) {
 }
 
 /* ---------- Parts: modus 1 ---------- */
-function polygonPrims(pts, lengths, angles, open, cut, names) {
+// Teken alleen de randen waarvoor mask[i] waar is (rand i = punt i → punt i+1).
+function edgeLines(pts, mask, style) {
+  const n = pts.length, out = [];
+  for (let i = 0; i < n; i++) if (mask[i]) out.push(P([pts[i], pts[(i + 1) % n]], style));
+  return out;
+}
+function polygonPrims(pts, lengths, angles, open, cut, names, inner) {
   const { add, mul, edgeNormal, inwardBisector } = Geo;
   const n = pts.length, pr = [P(pts, 'cut', true)];
-  if (cut) pr.push(P(cut, 'seam', true));
+  const joined = pts.map((_, i) => !(open && open[i]));
+  if (cut) pr.push(...edgeLines(cut, joined, 'seam'));
+  if (inner) pr.push(...edgeLines(inner, joined, 'bevel'));
   const extra = cut ? (num(state.settings.margeCm) || 0) : 0;
   for (let i = 0; i < n; i++) {
     const q = pts[(i + 1) % n];
-    pr.push(...dimPrims(pts[i], q, edgeNormal(pts, i), 0.7 + (open && open[i] ? 0 : extra), f2(lengths[i]) + (open && open[i] ? ' open' : '')));
+    pr.push(...dimPrims(pts[i], q, edgeNormal(pts, i), 0.7 + (joined[i] ? extra : 0), f2(lengths[i]) + (joined[i] ? '' : ' open')));
   }
   for (let i = 0; i < n; i++) {
     const b = inwardBisector(pts, i);
@@ -512,42 +537,71 @@ function polygonPrims(pts, lengths, angles, open, cut, names) {
   }
   return pr;
 }
+function noteBelow(pr, text) {
+  const bb = bbox(pr);
+  pr.push(T(bb.x0, bb.y0 - 0.5, text, { size: 0.28, a: 'start' }));
+}
+/** Rechthoekige strook (lengte L, breedte W) met verstek aan de uiteinden (sc/ec) en eventueel aan de lange randen.
+ *  inset > 0: de binnenkant is korter, de snijlijn ligt op de rand en de afschuinlijn erbinnen.
+ *  inset < 0 (binnenhoek): de binnenkant is langer, de snijlijn schuift naar buiten en de buitenkant wordt de afschuinlijn. */
+function stripPrims(L, W, sc, ec, longBevel, t, m) {
+  const xs = sc ? Math.min(0, sc.inset) : 0, xe = ec ? L - Math.min(0, ec.inset) : L;
+  const pr = [P([[xs, 0], [xe, 0], [xe, W], [xs, W]], 'cut', true)];
+  if (m) pr.push(P([[xs - (sc ? m : 0), 0], [xe + (ec ? m : 0), 0], [xe + (ec ? m : 0), W], [xs - (sc ? m : 0), W]], 'seam', true));
+  if (longBevel) pr.push(P([[xs, t], [xe, t]], 'bevel'), P([[xs, W - t], [xe, W - t]], 'bevel'));
+  const lab = c => `verstek ${f1(Math.abs(c.beta))}°`;
+  if (sc && Math.abs(sc.inset) > 1e-6) { const x = Math.max(0, sc.inset); pr.push(P([[x, 0], [x, W]], 'bevel')); }
+  if (ec && Math.abs(ec.inset) > 1e-6) { const x = L - Math.max(0, ec.inset); pr.push(P([[x, 0], [x, W]], 'bevel')); }
+  if (sc) pr.push(T(Math.max(0, sc.inset) + 0.3, W / 2, lab(sc), { size: 0.24, rot: 90 }));
+  if (ec) pr.push(T(L - Math.max(0, ec.inset) - 0.3, W / 2, lab(ec), { size: 0.24, rot: 90 }));
+  return pr;
+}
 
 function silParts(r) {
-  const parts = [];
+  const parts = [], verstek = r.joint === 'verstek', t = r.t;
   const names = r.pts.map((_, i) => 'P' + (i + 1));
-  parts.push(makePart('Voorpaneel', polygonPrims(r.pts, r.lengths, r.angles, r.open, r.cut, names)));
+  const panelNote = verstek
+    ? `gesloten randen: verstek 45°, afschuinlijn op ${f2(t)} cm van de rand (binnenkant)`
+    : 'stompe naad: de zijstrook komt tussen voor- en achterpaneel';
+  const front = polygonPrims(r.pts, r.lengths, r.angles, r.open, r.cut, names, r.inner);
+  noteBelow(front, panelNote);
+  parts.push(makePart('Voorpaneel', front));
   const mir = p => p.map(q => [-q[0], q[1]]);
-  const mpts = mir(r.pts), mOpen = r.open;
-  parts.push(makePart('Achterpaneel (gespiegeld)', polygonPrims(mpts, r.lengths, Geo.interiorAngles(mpts), mOpen, r.cut ? mir(r.cut) : null, names)));
+  const mpts = mir(r.pts);
+  const back = polygonPrims(mpts, r.lengths, Geo.interiorAngles(mpts), r.open, r.cut ? mir(r.cut) : null, names, r.inner ? mir(r.inner) : null);
+  noteBelow(back, panelNote);
+  parts.push(makePart('Achterpaneel (gespiegeld)', back));
   const W = r.stripWidth, m = state.settings.marge ? num(state.settings.margeCm) : 0;
   if (W <= 0) return parts;
   r.runs.forEach((run, ri) => {
     const tag = r.runs.length > 1 ? ' ' + (ri + 1) : '';
     if (!state.sil.pieces) {
-      const L = run.length, pr = [P([[0, 0], [L, 0], [L, W], [0, W]], 'cut', true)];
-      if (run.loop && m) pr.push(P([[0, 0], [L + m, 0], [L + m, W], [0, W]], 'seam', true));
+      const L = run.length;
+      const pr = stripPrims(L, W, run.closeCut, run.loop ? Object.assign({}, run.closeCut) : null, verstek, t, run.loop ? m : 0);
       run.pieces.forEach(pc => pr.push(T(pc.start + pc.len / 2, W + 0.4, `${names[pc.from]}→${names[pc.to]}  ${f2(pc.len)}`)));
+      let lastAt = -1e9, lvl = 0;
       run.folds.forEach(fd => {
+        lvl = fd.at - lastAt < 4 ? (lvl + 1) % 2 : 0; lastAt = fd.at;
+        const dy = lvl * 0.9;
         pr.push(P([[fd.at, 0], [fd.at, W]], 'score'));
-        pr.push(T(fd.at, -0.45, `${f1(fd.angle)}°`, { size: 0.28 }));
-        pr.push(T(fd.at, -0.85, fd.kind === 'buitenhoek' ? 'kras binnen' : 'kras buiten', { size: 0.24 }));
+        const g = fd.groove;
+        if (g.width > 0.02) pr.push(P([[fd.at - g.width / 2, 0], [fd.at - g.width / 2, W]], 'bevel'), P([[fd.at + g.width / 2, 0], [fd.at + g.width / 2, W]], 'bevel'));
+        pr.push(T(fd.at, -0.45 - dy, `${f1(fd.angle)}°`, { size: 0.28 }));
+        pr.push(T(fd.at, -0.85 - dy, `V ${f1(g.knik)}° ${g.side}`, { size: 0.22 }));
       });
-      pr.push(...dimPrims([0, 0], [L, 0], [0, -1], 1.5, 'lengte ' + f2(L)));
-      pr.push(...dimPrims([0, W], [0, 0], [-1, 0], 0.6, 'breedte ' + f2(W)));
+      pr.push(...dimPrims([0, 0], [L, 0], [0, -1], 2.4, 'lengte ' + f2(L)));
+      pr.push(...dimPrims([0, W], [0, 0], [-1, 0], 0.6 - Math.min(0, run.closeCut ? run.closeCut.inset : 0), 'breedte ' + f2(W)));
       if (run.loop) pr.push(T(L / 2, W / 2, `gesloten ring: sluitnaad bij ${names[run.startVertex]} (${f1(run.closeAngle)}°)`, { size: 0.26 }));
+      if (verstek) noteBelow(pr, `lange randen: verstek 45°, afschuinlijn op ${f2(t)} cm · binnenkant ${f2(W - 2 * t)} breed`);
       parts.push(makePart('Zijstrook' + tag + ' (uitgerold)', pr));
     } else {
       run.pieces.forEach((pc, k) => {
-        const L = pc.len, pr = [P([[0, 0], [L, 0], [L, W], [0, W]], 'cut', true)];
-        const joinStart = run.loop || k > 0, joinEnd = run.loop || k < run.pieces.length - 1;
-        if (m) pr.push(P([[joinStart ? -m : 0, 0], [L + (joinEnd ? m : 0), 0], [L + (joinEnd ? m : 0), W], [joinStart ? -m : 0, W]], 'seam', true));
-        const bev = v => `verstek ${f1(Math.abs(180 - r.angles[v]) / 2)}°`;
-        if (joinStart) pr.push(T(0.2, W / 2, bev(pc.from), { size: 0.24, rot: 90 }));
-        if (joinEnd) pr.push(T(L - 0.2, W / 2, bev(pc.to), { size: 0.24, rot: 90 }));
+        const L = pc.len;
+        const pr = stripPrims(L, W, pc.startCut, pc.endCut, verstek, t, m);
         pr.push(T(L / 2, W + 0.4, `${names[pc.from]}→${names[pc.to]}`));
         pr.push(...dimPrims([0, 0], [L, 0], [0, -1], 0.7, f2(L)));
-        pr.push(...dimPrims([0, W], [0, 0], [-1, 0], 0.6, f2(W)));
+        pr.push(...dimPrims([0, W], [0, 0], [-1, 0], 0.6 - Math.min(0, pc.startCut ? pc.startCut.inset : 0), f2(W)));
+        if (verstek) noteBelow(pr, `lange randen: verstek 45° (afschuinlijn op ${f2(t)} cm)`);
         parts.push(makePart(`Zijstrook${tag} · stuk ${k + 1}`, pr));
       });
     }
@@ -563,14 +617,24 @@ function secParts(r) {
     const nseg = c.segs.length;
     const outline = [...c.left, ...c.right.slice().reverse()];
     const pr = [P(outline, 'cut', true)];
+    const seamEdge = outline.map((_, i) => i !== nseg);
     if (m) {
       const d = outline.map((_, i) => (i < nseg || (i > nseg && i <= 2 * nseg) ? m : 0));
-      pr.push(P(Geo.offsetPolygon(outline, d), 'seam', true));
+      pr.push(...edgeLines(Geo.offsetPolygon(outline, d), d.map(v => v > 0), 'seam'));
     }
+    // verstek: afschuinlijnen op de binnenkant (naden links/rechts en de bodemnaad)
+    const tt = r.t, inset = b => tt * Math.tan(b / Geo.DEG);
+    const dIn = outline.map((_, i) => {
+      if (i < nseg) return -inset(c.leftSeam[i].bevel);
+      if (i === nseg) return 0;
+      if (i <= 2 * nseg) return -inset(c.rightSeam[2 * nseg - i].bevel);
+      return -inset(c.baseBevel);
+    });
+    if (tt > 0) pr.push(...edgeLines(Geo.offsetPolygon(outline, dIn), seamEdge, 'bevel'));
     c.creases.forEach(cr => {
       const k = cr.level;
       pr.push(P([c.left[k], c.right[k]], 'score'));
-      pr.push(T((c.left[k][0] + c.right[k][0]) / 2, cr.y - 0.45, `knik ${f1(cr.knik)}° ${cr.kind}`, { size: 0.27 }));
+      pr.push(T((c.left[k][0] + c.right[k][0]) / 2, cr.y - 0.45, `knik ${f1(cr.knik)}° ${cr.kind} · V-groef ${cr.groove.side}`, { size: 0.25 }));
     });
     c.widths.forEach((w, k) => {
       const y = c.left[k][1], x = (c.left[k][0] + c.right[k][0]) / 2;
@@ -584,12 +648,15 @@ function secParts(r) {
       pr.push(T(lm[0] + 0.35, lm[1], `afs. ${f1(c.leftSeam[k].bevel)}°`, { size: 0.24, rot: readable(le) }));
       pr.push(T(rm[0] - 0.35, rm[1], `afs. ${f1(c.rightSeam[k].bevel)}°`, { size: 0.24, rot: readable(re) }));
     });
-    pr.push(T(c.right[0][0] / 2, -0.5, `hoek bodem–wand ${f1(c.baseAngle)}°`, { size: 0.26 }));
+    pr.push(T(c.right[0][0] / 2, -0.5, `hoek bodem–wand ${f1(c.baseAngle)}° · verstek ${f1(c.baseBevel)}°`, { size: 0.26 }));
     parts.push(makePart(`Kolom ${c.label}${c.name ? ' (' + c.name + ')' : ''}`, pr));
   });
   const b = r.bottom;
   const cut = m ? Geo.offsetPolygon(b.pts, b.pts.map(() => m)) : null;
-  parts.push(makePart('Bodemplaat', polygonPrims(b.pts, b.lengths, b.angles, null, cut, null)));
+  const bInner = r.t > 0 ? Geo.offsetPolygon(b.pts, r.columns.map(c => -r.t * Math.tan(c.baseBevel / Geo.DEG))) : null;
+  const bp = polygonPrims(b.pts, b.lengths, b.angles, null, cut, null, bInner);
+  noteBelow(bp, 'verstek per rand: ' + r.columns.map(c => `${c.label} ${f1(c.baseBevel)}°`).join(' · '));
+  parts.push(makePart('Bodemplaat', bp));
   return parts;
 }
 
@@ -625,6 +692,7 @@ const STYLE = {
   score: { w: 0.3, color: '#1f5fa8', dash: [2, 1.5] },
   dim: { w: 0.15, color: '#666', dash: null },
   seam: { w: 0.25, color: '#d0801a', dash: [4, 1, 1, 1] },
+  bevel: { w: 0.2, color: '#7b3fa0', dash: [1, 1] },
   reg: { w: 0.2, color: '#000', dash: null },
 };
 
@@ -760,7 +828,7 @@ function toHPGL(lay) {
   lay.prims.filter(p => p.k === 'poly').sort((a, b) => (a.s === 'cut') - (b.s === 'cut')).forEach(p => {
     const pts = p.closed ? p.pts.concat([p.pts[0]]) : p.pts;
     sp(p.s === 'cut' ? 1 : 2);
-    if (p.s === 'score' || p.s === 'seam') dashed(pts, STYLE[p.s].dash.slice(0, 2).map(v => v * 1.5));
+    if (p.s === 'score' || p.s === 'seam' || p.s === 'bevel') dashed(pts, STYLE[p.s].dash.slice(0, 2).map(v => v * 1.5));
     else out += `PU${pt(pts[0])};PD${pts.slice(1).map(pt).join(',')};\n`;
   });
   sp(1);
@@ -791,13 +859,31 @@ function report(r) {
     L.push('', 'zijde        lengte');
     r.lengths.forEach((l, i) => L.push(`${(names[i] + '→' + names[(i + 1) % r.pts.length]).padEnd(10)} ${f2(l).padStart(7)}${r.open[i] ? '  open' : ''}`));
     L.push('', `Diepte vaas: ${f2(r.depth)}`);
-    L.push(`ZIJSTROOK: breedte ${f2(r.stripWidth)} (= diepte − 2t), totale lengte ${f2(r.closedLen)}`);
+    const vs = r.joint === 'verstek', mm = v => f1(v * 10) + ' mm';
+    L.push(vs
+      ? `ZIJSTROOK: breedte ${f2(r.stripWidth)} (= volle diepte, binnenkant ${f2(r.stripWidth - 2 * r.t)}), totale lengte ${f2(r.closedLen)}`
+      : `ZIJSTROOK: breedte ${f2(r.stripWidth)} (= diepte − 2t), totale lengte ${f2(r.closedLen)}`);
     r.runs.forEach((run, ri) => {
       L.push(`${r.runs.length > 1 ? ' strook ' + (ri + 1) + ': ' : ' '}lengte ${f2(run.length)}${run.loop ? ' (gesloten ring, sluitnaad bij ' + names[run.startVertex] + ', ' + f1(run.closeAngle) + '°)' : ''}`);
       run.pieces.forEach(pc => L.push(`   ${(names[pc.from] + '→' + names[pc.to]).padEnd(9)} ${f2(pc.len).padStart(7)}   van ${f2(pc.start)} tot ${f2(pc.start + pc.len)}`));
-      run.folds.forEach(fd => L.push(`   vouw bij ${names[fd.vertex]} op ${f2(fd.at)}: hoek ${f1(fd.angle)}° (${fd.kind}, kras ${fd.kind === 'buitenhoek' ? 'binnenkant' : 'buitenkant'})`));
-      if (state.sil.pieces) L.push('   losse stukken: verstek per uiteinde = (180° − hoek) / 2');
+      if (!state.sil.pieces) {
+        run.folds.forEach(fd => L.push(`   vouw bij ${names[fd.vertex]} op ${f2(fd.at)}: hoek ${f1(fd.angle)}° (${fd.kind}) · V-groef ${f1(fd.groove.knik)}° in de ${fd.groove.side}, ${mm(fd.groove.width)} breed`));
+        if (run.loop) L.push(`   sluitnaad bij ${names[run.startVertex]}: beide uiteinden verstek ${f1(Math.abs(run.closeCut.beta))}°`);
+      } else {
+        run.pieces.forEach(pc => {
+          const e = c => (c ? `verstek ${f1(Math.abs(c.beta))}° (${c.inset >= 0 ? 'binnenkant ' + mm(c.inset) + ' korter' : 'binnenkant ' + mm(-c.inset) + ' langer'})` : 'recht (open rand)');
+          L.push(`   stuk ${names[pc.from]}→${names[pc.to]}: begin ${e(pc.startCut)} · einde ${e(pc.endCut)}`);
+        });
+      }
     });
+    L.push('', 'VERBINDINGSNADEN');
+    if (vs) {
+      L.push(`  paneel ↔ zijstrook: verstek 45° op beide delen. Schuin afsnijden zodat de buitenkant de getekende maat houdt;`,
+        `  de afschuinlijn ligt ${mm(r.t)} binnen de rand. Open randen blijven recht.`);
+    } else {
+      L.push('  paneel ↔ zijstrook: stompe naad, de strook zit tussen voor- en achterpaneel.');
+    }
+    L.push('  strookhoeken: verstek = (180° − hoek) / 2 per uiteinde; bij een doorlopende strook een V-groef van (180° − hoek).');
   } else {
     L.push('SLAB-VAAS · FACETVAAS (gestapelde doorsneden)', head, 'Alle maten in cm, op natte (ongebakken) maat.');
     if (state.sec.sym) L.push('Symmetrisch: links = rechts (geen x-verschuiving).');
@@ -807,13 +893,14 @@ function report(r) {
       L.push(`MAL KOLOM ${c.label}${c.name ? ' (' + c.name + ')' : ''}`);
       L.push('  breedte per niveau: ' + c.widths.map(f2).join(' → '));
       c.segs.forEach((sg, k) => L.push(`  segment ${k + 1}: ware hoogte ${f2(sg.h)} (dz ${f2(sg.dz)}, uitsprong ${f2(sg.off)}, verschuiving langs rand ${f2(sg.a)})`));
-      c.creases.forEach(cr => L.push(`  kraslijn niveau ${cr.level + 1}: knik ${f1(cr.knik)}° ${cr.kind} (hoek tussen vlakken ${f1(cr.between)}°)`));
+      c.creases.forEach(cr => L.push(`  kraslijn niveau ${cr.level + 1}: knik ${f1(cr.knik)}° ${cr.kind} (hoek tussen vlakken ${f1(cr.between)}°) · V-groef ${f1(cr.knik)}° in de ${cr.groove.side}, ${f1(cr.groove.width * 10)} mm breed`));
       c.segs.forEach((sg, k) => L.push(`  naden segment ${k + 1}: links afschuinen ${f1(c.leftSeam[k].bevel)}° · rechts ${f1(c.rightSeam[k].bevel)}° (hoek tussen vlakken ${f1(c.leftSeam[k].between)}° / ${f1(c.rightSeam[k].between)}°)`));
-      L.push(`  hoek bodem–wand: ${f1(c.baseAngle)}°  · totale malhoogte ${f2(c.height)}`, '');
+      L.push(`  hoek bodem–wand: ${f1(c.baseAngle)}° · bodemnaad verstek ${f1(c.baseBevel)}° (wand én bodemplaat) · totale malhoogte ${f2(c.height)}`, '');
     });
     L.push('BODEMPLAAT (onderste doorsnede)');
     L.push('  zijden: ' + r.bottom.lengths.map(f2).join(' · '));
     L.push('  hoeken: ' + r.bottom.angles.map(a => f1(a) + '°').join(' · '));
+    L.push('  verstek per rand: ' + r.columns.map(c => `${c.label} ${f1(c.baseBevel)}°`).join(' · '));
     L.push('', 'Afschuinhoek = hoek t.o.v. loodrecht snijden (verstek); bij een rechte hoek 45°.');
   }
   return L.join('\n');
@@ -824,7 +911,7 @@ let current = { r: null, parts: [] };
 function compute() {
   const st = {
     krimp: num(state.settings.krimp), t: num(state.settings.t), ref: state.settings.ref,
-    marge: state.settings.marge, margeCm: num(state.settings.margeCm),
+    marge: state.settings.marge, margeCm: num(state.settings.margeCm), joint: state.sil.joint,
   };
   if (st.krimp >= 100) return { error: 'Krimp moet kleiner zijn dan 100 %.' };
   if (state.mode === 'silhouet') {
@@ -877,15 +964,15 @@ function drawPart(cv, part) {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, cw, ch);
   const X = x => pad + (x - bb.x0) * sc + (cw - 2 * pad - bb.w * sc) / 2, Y = y => pad + (bb.y1 - y) * sc;
-  const cols = { cut: '#2a2420', score: '#2f6fb0', dim: '#9a9086', seam: '#d08a1e' };
+  const cols = { cut: '#2a2420', score: '#2f6fb0', dim: '#9a9086', seam: '#d08a1e', bevel: '#7b3fa0' };
   part.prims.forEach(p => {
     if (p.k !== 'poly') return;
     g.beginPath();
     p.pts.forEach((q, i) => (i ? g.lineTo(X(q[0]), Y(q[1])) : g.moveTo(X(q[0]), Y(q[1]))));
     if (p.closed) g.closePath();
     if (p.s === 'cut' && p.closed) { g.fillStyle = '#f7ebe0'; g.fill(); }
-    g.strokeStyle = cols[p.s]; g.lineWidth = p.s === 'cut' ? 1.6 : p.s === 'dim' ? 0.8 : 1.3;
-    g.setLineDash(p.s === 'score' ? [5, 4] : p.s === 'seam' ? [7, 3, 2, 3] : []);
+    g.strokeStyle = cols[p.s]; g.lineWidth = p.s === 'cut' ? 1.6 : p.s === 'dim' ? 0.8 : p.s === 'bevel' ? 1.1 : 1.3;
+    g.setLineDash(p.s === 'score' ? [5, 4] : p.s === 'seam' ? [7, 3, 2, 3] : p.s === 'bevel' ? [2, 2] : []);
     g.stroke();
   });
   g.setLineDash([]);
@@ -1275,6 +1362,7 @@ function syncInputs() {
   $('s-margecm').value = String(s.margeCm).replace('.', ',');
   $('sil-depth').value = String(state.sil.depth).replace('.', ',');
   $('sil-pieces').checked = !!state.sil.pieces;
+  $('sil-joint').value = state.sil.joint;
   $('sec-diamref').value = state.sec.diamRef;
   $('sil-sym').checked = symOn();
   $('sec-sym').checked = !!state.sec.sym;
@@ -1300,6 +1388,7 @@ function init() {
   bind('s-margecm', el => { state.settings.margeCm = el.value; });
   bind('sil-depth', el => { state.sil.depth = el.value; });
   bind('sil-pieces', el => { state.sil.pieces = el.checked; }, 'change');
+  bind('sil-joint', el => { state.sil.joint = el.value; }, 'change');
   bind('sec-diamref', el => { state.sec.diamRef = el.value; }, 'change');
   bind('sec-sym', el => { state.sec.sym = el.checked; renderLevels(); }, 'change');
   bind('sil-sym', el => { symEnable(el.checked); edDraw(); renderPtTable(); }, 'change');

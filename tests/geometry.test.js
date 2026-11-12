@@ -147,5 +147,31 @@ test('toHalf haalt de rechterhelft uit een volledige vorm (heen en terug)', () =
   near(Geo.edgeLengths(back.pts).reduce((x, y) => x + y, 0), Geo.edgeLengths(pts).reduce((x, y) => x + y, 0), 'omtrek', 1e-9);
 });
 
+console.log('\nVerstek (mitre)');
+const vst = Geo.silhouette({ pts: [[9, 0], [21, 0], [30, 18], [0, 18]], open: [false, false, true, false], depth: 8 },
+  Object.assign({}, noShrink, { t: 0.8, joint: 'verstek' }));
+test('verstek: strook = volle diepte 8, lengte blijft 52,25', () => {
+  near(vst.stripWidth, 8, 'breedte', 1e-9); near(vst.closedLen, 52.25, 'lengte');
+});
+test('verstek: afschuinlijn paneel ligt 0,8 binnen de gesloten randen', () => {
+  near(vst.inner[0][1], 0.8, 'onderrand', 1e-9);
+  near(vst.inner[2][1], 18, 'open bovenrand blijft', 1e-9);
+});
+test('verstek strookstuk onderaan: (180 − 116,57)/2 = 31,7°', () => {
+  const pc = vst.runs[0].pieces[1];
+  near(Math.abs(pc.startCut.beta), 31.72, 'hoek', 0.01);
+  near(pc.startCut.inset, 0.8 * Math.tan(31.717 / Geo.DEG), 'inset', 0.001);
+  assert.strictEqual(vst.runs[0].pieces[0].startCut, null);
+});
+test('V-groef bij doos-hoek (90°) = 90° en 2t breed', () => {
+  const box = Geo.silhouette({ pts: [[0, 0], [10, 0], [10, 10], [0, 10]], open: [false, false, true, false], depth: 8 }, Object.assign({}, noShrink, { t: 0.8 }));
+  near(box.runs[0].folds[0].groove.knik, 90, 'groef', 1e-9);
+  near(box.runs[0].folds[0].groove.width, 1.6, 'breedte', 1e-9);
+});
+test('facetvaas: bodemnaad rechte doos = verstek 45°', () => {
+  const box = Geo.sections({ levels: [{ z: 0, type: 'rect', w: 10, d: 10 }, { z: 10, type: 'rect', w: 10, d: 10 }] }, noShrink);
+  near(box.columns[0].baseBevel, 45, 'bodem', 1e-9);
+});
+
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);
 process.exit(failed ? 1 : 0);

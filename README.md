@@ -13,6 +13,11 @@ Je hebt geen server en geen build-stap nodig.
   Per zijde krijg je één mal met kraslijnen, ware hoogtes, knikhoeken en afschuinhoeken van de naden.
   De app tekent ook de bodemplaat. **Symmetrisch** zet alle x-verschuivingen op 0, zodat links en rechts gelijk zijn.
 
+**Verbindingsnaden:** standaard rekent de silhouetvaas met **verstek** (45°) tussen paneel en zijstrook. Dan is de strook zo breed als de volle diepte, en een paarse stippellijn toont waar de schuine snede de andere kant van de plaat raakt.
+Strookhoeken krijgen een V-groef (doorlopende strook) of een verstek per uiteinde (losse stukken). Bij een binnenhoek is de binnenkant langer, dus daar schuift de snijlijn naar buiten.
+In de facetvaas krijg je de verstekken van de verticale naden, de bodemnaad en de V-groeven op de knikken.
+Kies **stomp** als de strook tussen de panelen moet zitten (breedte = diepte − 2t).
+
 Instellingen: krimp % (maten × 1/(1 − krimp)), slabdikte, buiten- of binnenmaat en naadmarge.
 
 ## Export
