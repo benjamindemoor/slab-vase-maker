@@ -61,6 +61,25 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 .legend i.m{border-top:2px dashed var(--seam)}
 .legend i.v{border-top:2px dotted #7b3fa0}
 .hide{display:none!important}
+#lib-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin-top:10px}
+.vase{display:flex;gap:10px;border:1px solid var(--line);border-radius:9px;padding:6px;background:#fff;align-items:center;min-width:0}
+.vase.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.vase img{width:84px;height:63px;border-radius:6px;object-fit:cover;background:#f6f0e8;flex:none;cursor:pointer}
+.vi{min-width:0;display:flex;flex-direction:column;gap:2px;flex:1}
+.vi b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vi span{font-size:12px;color:var(--muted)}
+.vi .btns{margin-top:3px;gap:4px}
+.vi .btns .b{padding:3px 8px;font-size:12px}
+.lib-row{display:flex;gap:8px;flex-wrap:wrap}
+.lib-row input{flex:1 1 180px}
+.part{cursor:zoom-in}
+.part h4{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.part .zoom{border:0;background:none;color:var(--accent);font:inherit;font-size:12px;cursor:pointer;padding:0;white-space:nowrap}
+#viewer{position:fixed;inset:0;z-index:50;background:#fff;display:flex;flex-direction:column}
+.vbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--card)}
+.vbar b{flex:1 1 220px;font-size:14px}
+#v-scale{font-size:12px;color:var(--muted)}
+#v-canvas{flex:1;width:100%;min-height:0;touch-action:none;cursor:grab;display:block}
 </style>
 </head>
 <body>
@@ -74,6 +93,16 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 
 <main>
 <div class="col">
+  <div class="card">
+    <h2>Mijn vazen</h2>
+    <div class="lib-row">
+      <input type="text" id="lib-name" placeholder="Naam van deze vaas, bv. Fles hoekig 30 cm">
+      <button class="b p" id="lib-save">Bewaar vaas</button>
+    </div>
+    <div id="lib-list"></div>
+    <div class="btns"><button class="b" id="lib-export">Alle vazen exporteren (JSON)</button></div>
+    <p class="hint">Vazen worden in deze browser bewaard. Bewaar met dezelfde naam om een vaas bij te werken. Met “Alle vazen exporteren” maak je een reservekopie of zet je ze over naar een ander toestel; inladen gaat via “Ontwerp laden…”.</p>
+  </div>
   <div class="card">
     <h2>Instellingen</h2>
     <div class="row">
@@ -134,6 +163,7 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   </div>
   <div class="card">
     <h2>Mallen</h2>
+    <p class="hint" style="margin:0 0 6px">Tik op een mal om hem groot te bekijken, in te zoomen of als PNG te bewaren.</p>
     <div class="legend"><span><i></i>snijlijn</span><span><i class="s"></i>kras-/vouwlijn</span><span><i class="m"></i>naadmarge</span><span><i class="v"></i>afschuinlijn: hier eindigt de schuine snede aan de andere kant van de plaat</span></div>
     <div class="parts" id="parts"></div>
   </div>
@@ -159,6 +189,18 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   </div>
 </div>
 </main>
+
+<div id="viewer" class="hide" role="dialog" aria-label="Mal vergroot">
+  <div class="vbar">
+    <b id="v-title"></b><span id="v-scale"></span>
+    <button class="b" id="v-prev" title="vorige mal">‹</button><button class="b" id="v-next" title="volgende mal">›</button>
+    <button class="b" id="v-out">−</button><button class="b" id="v-in">+</button>
+    <button class="b" id="v-fit">Passend</button><button class="b" id="v-png">PNG opslaan</button>
+    <button class="b p" id="v-close">Sluiten</button>
+  </div>
+  <canvas id="v-canvas"></canvas>
+  <p class="hint" style="margin:0;padding:6px 12px">Knijp of scroll om te zoomen, sleep om te verschuiven. De labels groeien mee met de tekening.</p>
+</div>
 
 <script>
 /*GEO-START*/
@@ -459,7 +501,7 @@ function loadState(obj) {
   st.sil = Object.assign(defaults().sil, (obj || {}).sil || {});
   st.sil.sym = Object.assign(defaults().sil.sym, ((obj || {}).sil || {}).sym || {});
   st.sec = Object.assign(defaults().sec, (obj || {}).sec || {});
-  st.sec.levels = st.sec.levels.map(l => lvl(l.z, l));
+  st.sec.levels = st.sec.levels.map(l => { const o = Object.assign({}, l); delete o.id; return lvl(o.z, o); });
   while (st.sil.open.length < st.sil.pts.length) st.sil.open.push(false);
   st.sil.open.length = st.sil.pts.length;
   state = st;
@@ -487,7 +529,7 @@ function dimPrims(p, q, nrm, off, label) {
     P([add(p, mul(nrm, 0.12)), add(p, mul(nrm, off + 0.2))], 'dim'),
     P([add(q, mul(nrm, 0.12)), add(q, mul(nrm, off + 0.2))], 'dim'),
     P([a, b], 'dim'), P([sub(a, tk), add(a, tk)], 'dim'), P([sub(b, tk), add(b, tk)], 'dim'),
-    T(...add(mid, mul(nrm, 0.32)), label, { rot: readable(e) }),
+    T(...add(mid, mul(nrm, 0.36)), label, { rot: readable(e), size: 0.36 }),
   ];
 }
 
@@ -710,7 +752,7 @@ function toSVG(lay, title) {
   out += '</g>\n<g font-family="Helvetica, Arial, sans-serif" fill="#000">\n';
   lay.prims.forEach(p => {
     if (p.k !== 'text') return;
-    out += `<text x="${r3(p.x)}" y="${r3(p.y)}" font-size="${r3(p.size)}" text-anchor="${p.a}" dominant-baseline="central"${p.rot ? ` transform="rotate(${r3(-p.rot)} ${r3(p.x)} ${r3(p.y)})"` : ''}${p.title ? ' font-weight="bold"' : ''}>${xmlEsc(p.t)}</text>\n`;
+    out += `<text x="${r3(p.x)}" y="${r3(p.y)}" font-size="${r3(p.size)}" text-anchor="${p.a}" dominant-baseline="central" stroke="#fff" stroke-width="${r3(p.size * 0.22)}" stroke-linejoin="round" paint-order="stroke"${p.rot ? ` transform="rotate(${r3(-p.rot)} ${r3(p.x)} ${r3(p.y)})"` : ''}${p.title ? ' font-weight="bold"' : ''}>${xmlEsc(p.t)}</text>\n`;
   });
   return out + '</g>\n</svg>\n';
 }
@@ -760,7 +802,9 @@ function toPDF(lay) {
         const a = p.rot / Geo.DEG, co = Math.cos(a), si = Math.sin(a), sz = p.size * k;
         const w = textWidth(p.t, sz), f = p.a === 'middle' ? 0.5 : p.a === 'end' ? 1 : 0;
         const x0 = X(p.x) - co * w * f + si * 0.35 * sz, y0 = Y(p.y) - si * w * f - co * 0.35 * sz;
-        s += `0 g BT /${p.title ? 'F2' : 'F1'} ${n2(sz)} Tf ${n2(co)} ${n2(si)} ${n2(-si)} ${n2(co)} ${n2(x0)} ${n2(y0)} Tm (${pdfStr(p.t)}) Tj ET\n`;
+        const tm = `${n2(co)} ${n2(si)} ${n2(-si)} ${n2(co)} ${n2(x0)} ${n2(y0)} Tm (${pdfStr(p.t)}) Tj ET\n`;
+        s += `1 1 1 RG ${n2(sz * 0.22)} w [] 0 d 1 j BT 1 Tr /${p.title ? 'F2' : 'F1'} ${n2(sz)} Tf ${tm}`;
+        s += `0 g BT 0 Tr /${p.title ? 'F2' : 'F1'} ${n2(sz)} Tf ${tm}`;
       }
     });
     s += 'Q\n';
@@ -943,47 +987,141 @@ function renderParts(parts) {
   while (box.children.length > parts.length) box.lastChild.remove();
   while (box.children.length < parts.length) {
     const d = document.createElement('div'); d.className = 'part';
-    d.innerHTML = '<h4></h4><canvas></canvas>'; box.appendChild(d);
+    d.innerHTML = '<h4><span></span><button class="zoom" title="vergroten">⤢ vergroot</button></h4><canvas></canvas>';
+    d.addEventListener('click', () => openViewer(+d.dataset.i));
+    box.appendChild(d);
   }
   parts.forEach((p, i) => {
     const el = box.children[i];
+    el.dataset.i = i;
     el.style.gridColumn = p.bb.w > 2.2 * p.bb.h ? '1 / -1' : '';
-    el.querySelector('h4').textContent = `${p.title} · ${f2(p.bb.w)} × ${f2(p.bb.h)} cm`;
+    el.querySelector('h4 span').textContent = `${p.title} · ${f2(p.bb.w)} × ${f2(p.bb.h)} cm`;
     drawPart(el.querySelector('canvas'), p);
   });
+  if (viewer.open) drawViewer();
 }
-function drawPart(cv, part) {
-  const dpr = window.devicePixelRatio || 1;
-  const bb = bbox(part.prims.filter(p => !p.title));
-  const cw = cv.clientWidth || 260;
-  const pad = 6, sc = Math.min((cw - 2 * pad) / bb.w, 420 / bb.h);
-  const ch = bb.h * sc + 2 * pad;
-  cv.style.height = ch + 'px';
-  cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
-  const g = cv.getContext('2d');
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.clearRect(0, 0, cw, ch);
-  const X = x => pad + (x - bb.x0) * sc + (cw - 2 * pad - bb.w * sc) / 2, Y = y => pad + (bb.y1 - y) * sc;
-  const cols = { cut: '#2a2420', score: '#2f6fb0', dim: '#9a9086', seam: '#d08a1e', bevel: '#7b3fa0' };
-  part.prims.forEach(p => {
+
+/** Teken de prims van een onderdeel. X/Y: cm → px, sc: px per cm.
+ *  Tekst schaalt mee met de tekening (ware verhouding), maar nooit kleiner dan minPx. Witte rand rond tekst voor leesbaarheid. */
+const PART_COLS = { cut: '#2a2420', score: '#2f6fb0', dim: '#8a7f75', seam: '#d08a1e', bevel: '#7b3fa0' };
+function paintPrims(g, prims, X, Y, sc, o = {}) {
+  const lw = o.lw || 1, minPx = o.minPx || 11, maxPx = o.maxPx || 1e9;
+  prims.forEach(p => {
     if (p.k !== 'poly') return;
     g.beginPath();
     p.pts.forEach((q, i) => (i ? g.lineTo(X(q[0]), Y(q[1])) : g.moveTo(X(q[0]), Y(q[1]))));
     if (p.closed) g.closePath();
     if (p.s === 'cut' && p.closed) { g.fillStyle = '#f7ebe0'; g.fill(); }
-    g.strokeStyle = cols[p.s]; g.lineWidth = p.s === 'cut' ? 1.6 : p.s === 'dim' ? 0.8 : p.s === 'bevel' ? 1.1 : 1.3;
-    g.setLineDash(p.s === 'score' ? [5, 4] : p.s === 'seam' ? [7, 3, 2, 3] : p.s === 'bevel' ? [2, 2] : []);
+    g.strokeStyle = PART_COLS[p.s];
+    g.lineWidth = lw * (p.s === 'cut' ? 2 : p.s === 'dim' ? 0.9 : p.s === 'bevel' ? 1.2 : 1.5);
+    g.setLineDash((p.s === 'score' ? [6, 4] : p.s === 'seam' ? [8, 3, 2, 3] : p.s === 'bevel' ? [2, 2.5] : []).map(v => v * lw));
     g.stroke();
   });
   g.setLineDash([]);
-  part.prims.forEach(p => {
-    if (p.k !== 'text' || p.title) return;
-    const px = Math.max(8, Math.min(12, p.size * sc * 1.1));
+  g.lineJoin = 'round';
+  prims.forEach(p => {
+    if (p.k !== 'text' || (p.title && !o.titles)) return;
+    const px = Math.min(maxPx, Math.max(minPx, p.size * sc));
     g.save(); g.translate(X(p.x), Y(p.y)); g.rotate(-p.rot / Geo.DEG);
-    g.font = `${px}px system-ui, sans-serif`; g.fillStyle = '#2a2420';
+    const dimLike = /^[\d,]+( open)?$|^h |^lengte |^breedte /.test(p.t);
+    g.font = `${p.title ? '700 ' : dimLike ? '600 ' : ''}${px}px system-ui, -apple-system, sans-serif`;
     g.textAlign = p.a === 'middle' ? 'center' : p.a === 'end' ? 'right' : 'left'; g.textBaseline = 'middle';
-    g.fillText(p.t, 0, 0); g.restore();
+    g.lineWidth = Math.max(3, px * 0.28); g.strokeStyle = 'rgba(255,255,255,.92)'; g.strokeText(p.t, 0, 0);
+    g.fillStyle = dimLike ? '#1d1712' : '#3a322b'; g.fillText(p.t, 0, 0);
+    g.restore();
   });
+}
+function drawPart(cv, part) {
+  const dpr = window.devicePixelRatio || 1;
+  const prims = part.prims.filter(p => !p.title), bb = bbox(prims);
+  const cw = cv.clientWidth || 300;
+  const pad = 8, sc = Math.min((cw - 2 * pad) / bb.w, 460 / bb.h);
+  const ch = bb.h * sc + 2 * pad;
+  cv.style.height = ch + 'px';
+  cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, cw, ch);
+  const X = x => pad + (x - bb.x0) * sc + (cw - 2 * pad - bb.w * sc) / 2, Y = y => pad + (bb.y1 - y) * sc;
+  paintPrims(g, prims, X, Y, sc, { minPx: Math.max(9, Math.min(10.5, sc * 0.9)), maxPx: 15 });
+}
+
+/* ---------- Vergrote weergave (zoomen, slepen, PNG) ---------- */
+const viewer = { open: false, i: 0, sc: 1, cx: 0, cy: 0, ptrs: new Map(), pinch: null };
+function openViewer(i) {
+  if (!current.parts[i]) return;
+  viewer.open = true; viewer.i = i;
+  $('viewer').classList.remove('hide'); document.body.style.overflow = 'hidden';
+  viewerFit();
+}
+function closeViewer() { viewer.open = false; $('viewer').classList.add('hide'); document.body.style.overflow = ''; }
+function viewerFit() {
+  const part = current.parts[viewer.i]; if (!part) return closeViewer();
+  const cv = $('v-canvas'), bb = bbox(part.prims.filter(p => !p.title));
+  viewer.sc = Math.min(cv.clientWidth / (bb.w + 2), cv.clientHeight / (bb.h + 2));
+  viewer.cx = (bb.x0 + bb.x1) / 2; viewer.cy = (bb.y0 + bb.y1) / 2;
+  drawViewer();
+}
+function drawViewer() {
+  const part = current.parts[viewer.i]; if (!part) return closeViewer();
+  const cv = $('v-canvas'), dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
+  const sc = viewer.sc, X = x => w / 2 + (x - viewer.cx) * sc, Y = y => h / 2 - (y - viewer.cy) * sc;
+  // cm-raster
+  const step = sc > 25 ? 1 : 5;
+  g.strokeStyle = '#f1ebe3'; g.lineWidth = 1;
+  for (let x = Math.floor((viewer.cx - w / 2 / sc) / step) * step; X(x) < w; x += step) { g.beginPath(); g.moveTo(X(x), 0); g.lineTo(X(x), h); g.stroke(); }
+  for (let y = Math.floor((viewer.cy - h / 2 / sc) / step) * step; Y(y) > 0; y += step) { g.beginPath(); g.moveTo(0, Y(y)); g.lineTo(w, Y(y)); g.stroke(); }
+  paintPrims(g, part.prims.filter(p => !p.title), X, Y, sc, { minPx: Math.max(9, Math.min(13, sc * 0.9)), lw: Math.min(2, Math.max(1, sc / 30)) });
+  $('v-title').textContent = `${part.title} · ${f2(part.bb.w)} × ${f2(part.bb.h)} cm`;
+  $('v-scale').textContent = `raster ${step} cm · ${Math.round(sc / 37.8 * 100)} %`;
+}
+function viewerZoom(f, px, py) {
+  const cv = $('v-canvas'), w = cv.clientWidth, h = cv.clientHeight;
+  const wx = viewer.cx + (px - w / 2) / viewer.sc, wy = viewer.cy - (py - h / 2) / viewer.sc;
+  viewer.sc = Math.max(2, Math.min(400, viewer.sc * f));
+  viewer.cx = wx - (px - w / 2) / viewer.sc; viewer.cy = wy + (py - h / 2) / viewer.sc;
+  drawViewer();
+}
+function partPNG(part) {
+  // ware verhouding op 40 px/cm (≈ 100 dpi), labels minstens 20 px
+  const prims = part.prims, bb = bbox(prims), sc = 40, pad = 30;
+  const W = Math.ceil(bb.w * sc + 2 * pad), H = Math.ceil(bb.h * sc + 2 * pad);
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  paintPrims(g, prims, x => pad + (x - bb.x0) * sc, y => pad + (bb.y1 - y) * sc, sc, { minPx: 20, lw: 1.8, titles: true });
+  return cv;
+}
+function setupViewer() {
+  const cv = $('v-canvas'), pos = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  $('v-close').addEventListener('click', closeViewer);
+  $('v-fit').addEventListener('click', viewerFit);
+  $('v-in').addEventListener('click', () => viewerZoom(1.4, cv.clientWidth / 2, cv.clientHeight / 2));
+  $('v-out').addEventListener('click', () => viewerZoom(1 / 1.4, cv.clientWidth / 2, cv.clientHeight / 2));
+  $('v-prev').addEventListener('click', () => { viewer.i = (viewer.i - 1 + current.parts.length) % current.parts.length; viewerFit(); });
+  $('v-next').addEventListener('click', () => { viewer.i = (viewer.i + 1) % current.parts.length; viewerFit(); });
+  $('v-png').addEventListener('click', () => {
+    const part = current.parts[viewer.i];
+    partPNG(part).toBlob(b => download(baseName() + '-' + part.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '') + '.png', b));
+  });
+  document.addEventListener('keydown', e => { if (viewer.open && e.key === 'Escape') closeViewer(); });
+  cv.addEventListener('wheel', e => { e.preventDefault(); const [x, y] = pos(e); viewerZoom(Math.exp(-e.deltaY * 0.0015), x, y); }, { passive: false });
+  cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); viewer.ptrs.set(e.pointerId, pos(e)); viewer.pinch = null; });
+  cv.addEventListener('pointermove', e => {
+    if (!viewer.ptrs.has(e.pointerId)) return;
+    const prev = viewer.ptrs.get(e.pointerId), now = pos(e);
+    viewer.ptrs.set(e.pointerId, now);
+    if (viewer.ptrs.size === 1) {
+      viewer.cx -= (now[0] - prev[0]) / viewer.sc; viewer.cy += (now[1] - prev[1]) / viewer.sc; drawViewer();
+    } else if (viewer.ptrs.size === 2) {
+      const [a, b] = [...viewer.ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      if (viewer.pinch) viewerZoom(d / viewer.pinch, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+      viewer.pinch = d;
+    }
+  });
+  const up = e => { viewer.ptrs.delete(e.pointerId); viewer.pinch = null; };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
 }
 
 /* ---------- 3D preview ---------- */
@@ -1353,6 +1491,87 @@ function exportLayout(withControl = true) {
   return layout((withControl ? [controlPart()] : []).concat(current.parts));
 }
 
+/* ================= Mijn vazen (bibliotheek in localStorage) ================= */
+const LIB = 'slabvaas.lib.v1';
+let libCurrent = null;
+function libGet() { try { return JSON.parse(localStorage.getItem(LIB)) || []; } catch (e) { return []; } }
+function libPut(list) {
+  try { localStorage.setItem(LIB, JSON.stringify(list)); return true; }
+  catch (e) { alert('Bewaren lukt niet: de opslag van deze browser is vol of geblokkeerd. Gebruik “Ontwerp opslaan (JSON)”.'); return false; }
+}
+function libThumb() {
+  draw3d();
+  const src = $('view3d'), c = document.createElement('canvas'); c.width = 168; c.height = 126;
+  const g = c.getContext('2d'); g.fillStyle = '#f6f0e8'; g.fillRect(0, 0, 168, 126);
+  const sw = src.width, sh = src.height, cw = Math.min(sw, sh * 4 / 3), ch = cw * 3 / 4;
+  if (sw && sh) g.drawImage(src, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, 168, 126);
+  return c.toDataURL('image/jpeg', 0.8);
+}
+function libSummary() {
+  const r = current.r; if (!r) return '';
+  if (state.mode === 'silhouet') {
+    const xs = r.pts.map(p => p[0]), ys = r.pts.map(p => p[1]);
+    return `${f1(Math.max(...xs) - Math.min(...xs))} × ${f1(Math.max(...ys) - Math.min(...ys))} × ${f1(r.depth)} cm`;
+  }
+  return `${r.N}-zijdig · ${f1(r.levels[r.levels.length - 1].z - r.levels[0].z)} cm hoog`;
+}
+const libId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+function libSaveCurrent() {
+  if (!current.r) { alert('Dit ontwerp is nog niet geldig. Los eerst de melding op.'); return; }
+  const name = $('lib-name').value.trim() || 'Vaas ' + new Date().toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' });
+  const list = libGet(), ex = list.find(v => v.name.toLowerCase() === name.toLowerCase());
+  if (ex && ex.id !== libCurrent && !confirm(`Er bestaat al een vaas “${ex.name}”. Overschrijven?`)) return;
+  const item = { id: ex ? ex.id : libId(), name, mode: state.mode, date: new Date().toISOString(),
+    size: libSummary(), thumb: libThumb(), state: JSON.parse(JSON.stringify(state)) };
+  if (!libPut([item].concat(list.filter(v => v !== ex)))) return;
+  libCurrent = item.id; $('lib-name').value = name; libRender();
+  const btn = $('lib-save'); btn.textContent = 'Bewaard ✓'; setTimeout(() => { btn.textContent = 'Bewaar vaas'; }, 1500);
+}
+function libOpen(v) {
+  loadState(v.state); libCurrent = v.id; $('lib-name').value = v.name;
+  syncInputs(); edDraw(); update(); libRender();
+}
+function libRender() {
+  const list = libGet(), box = $('lib-list');
+  if (!list.length) { box.innerHTML = '<p class="hint" style="margin:0">Nog geen bewaarde vazen. Geef je ontwerp een naam en klik op “Bewaar vaas”.</p>'; return; }
+  box.innerHTML = list.map(v => `<div class="vase${v.id === libCurrent ? ' cur' : ''}" data-id="${v.id}">
+      <img src="${v.thumb || ''}" alt="" data-a="open" title="openen">
+      <div class="vi"><b title="${xmlEsc(v.name)}">${xmlEsc(v.name)}</b>
+        <span>${v.mode === 'silhouet' ? 'Silhouetvaas' : 'Facetvaas'}${v.size ? ' · ' + xmlEsc(v.size) : ''}</span>
+        <span>${new Date(v.date).toLocaleDateString('nl-BE')}</span>
+        <div class="btns"><button class="b" data-a="open">Openen</button><button class="b" data-a="dup">Kopie</button><button class="b" data-a="ren">Hernoem</button><button class="x" data-a="del" title="verwijderen">×</button></div>
+      </div></div>`).join('');
+}
+function libEvents() {
+  $('lib-save').addEventListener('click', libSaveCurrent);
+  $('lib-name').addEventListener('keydown', e => { if (e.key === 'Enter') libSaveCurrent(); });
+  $('lib-list').addEventListener('click', e => {
+    const a = e.target.dataset.a, el = e.target.closest('.vase'); if (!a || !el) return;
+    const list = libGet(), v = list.find(x => x.id === el.dataset.id); if (!v) return;
+    if (a === 'open') libOpen(v);
+    else if (a === 'del') {
+      if (!confirm(`“${v.name}” verwijderen?`)) return;
+      libPut(list.filter(x => x !== v)); if (libCurrent === v.id) libCurrent = null; libRender();
+    } else if (a === 'ren') {
+      const n = prompt('Nieuwe naam', v.name); if (!n || !n.trim()) return;
+      v.name = n.trim(); libPut(list); if (libCurrent === v.id) $('lib-name').value = v.name; libRender();
+    } else if (a === 'dup') {
+      const c = Object.assign({}, v, { id: libId(), name: v.name + ' (kopie)', date: new Date().toISOString() });
+      libPut([c].concat(list)); libRender();
+    }
+  });
+  $('lib-export').addEventListener('click', () => {
+    const list = libGet(); if (!list.length) { alert('Er zijn nog geen bewaarde vazen.'); return; }
+    download('mijn-vazen.json', JSON.stringify({ app: 'slab-vaas-bibliotheek', version: 1, items: list }, null, 1), 'application/json');
+  });
+  libRender();
+}
+function libImport(obj) {
+  const list = libGet(), ids = new Set(list.map(v => v.id));
+  const add = (obj.items || []).filter(v => v && v.state && !ids.has(v.id));
+  if (libPut(add.concat(list))) { libRender(); alert(`${add.length} vaas/vazen toegevoegd aan “Mijn vazen”.`); }
+}
+
 /* ================= Wiring ================= */
 function syncInputs() {
   const s = state.settings;
@@ -1449,6 +1668,8 @@ function init() {
   });
   levelEvents();
   edPointer();
+  setupViewer();
+  libEvents();
 
   $('copy').addEventListener('click', async () => {
     const txt = $('report').textContent, btn = $('copy');
@@ -1466,14 +1687,18 @@ function init() {
   $('load-json').addEventListener('click', () => $('file-json').click());
   $('file-json').addEventListener('change', async e => {
     const f = e.target.files[0]; if (!f) return;
-    try { const obj = JSON.parse(await f.text()); loadState(obj.state || obj); syncInputs(); edDraw(); update(); }
+    try {
+      const obj = JSON.parse(await f.text());
+      if (Array.isArray(obj.items)) libImport(obj);
+      else { loadState(obj.state || obj); libCurrent = null; syncInputs(); edDraw(); update(); libRender(); }
+    }
     catch (err) { alert('Kon dit bestand niet lezen: ' + err.message); }
     e.target.value = '';
   });
-  $('reset').addEventListener('click', () => { if (confirm('Alles terugzetten naar de standaardwaarden?')) { state = defaults(); syncInputs(); edDraw(); update(); } });
+  $('reset').addEventListener('click', () => { if (confirm('Het huidige ontwerp terugzetten naar de standaardwaarden? Je bewaarde vazen blijven staan.')) { state = defaults(); libCurrent = null; $('lib-name').value = ''; syncInputs(); edDraw(); update(); libRender(); } });
 
   let rt = 0;
-  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { ed.view = null; edDraw(); update(); }, 150); });
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { ed.view = null; edDraw(); update(); if (viewer.open) drawViewer(); }, 150); });
   syncInputs(); edDraw(); update();
 }
 init();

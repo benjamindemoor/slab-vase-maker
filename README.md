@@ -20,6 +20,13 @@ Kies **stomp** als de strook tussen de panelen moet zitten (breedte = diepte −
 
 Instellingen: krimp % (maten × 1/(1 − krimp)), slabdikte, buiten- of binnenmaat en naadmarge.
 
+## Mijn vazen
+Geef een ontwerp een naam en klik op **Bewaar vaas**. Je vaas komt dan met een 3D-miniatuur in de lijst “Mijn vazen”, waar je hem kunt openen, kopiëren, hernoemen of verwijderen. Bewaar je opnieuw met dezelfde naam, dan werk je de vaas bij.
+De lijst staat in de browser (localStorage). Met **Alle vazen exporteren** maak je een reservekopie of zet je de vazen over naar een ander toestel; inladen gaat via “Ontwerp laden…”.
+
+## Mallen bekijken
+Tik op een mal om hem schermvullend te bekijken. Je kunt zoomen (knijpen of scrollen) en schuiven, en met de pijltjes naar de volgende mal gaan. Met **PNG opslaan** krijg je een afbeelding met grote, leesbare maten.
+
 ## Export
 - SVG op ware grootte (mm)
 - PDF over A4-pagina's, met overlapstroken, paskruisjes en een controleblok van 10 × 10 cm
