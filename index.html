@@ -176,7 +176,10 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
     <h2>Export &amp; opslaan</h2>
     <div class="btns">
       <button class="b p" id="ex-svg">SVG 1:1</button>
-      <button class="b p" id="ex-pdf">PDF (A4-tegels)</button>
+      <label class="f">Papier
+        <select id="s-paper"><option value="A4">A4</option><option value="A3">A3</option></select></label>
+      <button class="b p" id="ex-print">Printen</button>
+      <button class="b p" id="ex-pdf">PDF</button>
       <button class="b" id="ex-hpgl">HPGL (penplotter)</button>
     </div>
     <div class="btns">
@@ -185,7 +188,7 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
       <input type="file" id="file-json" accept=".json,application/json" class="hide">
       <button class="b" id="reset">Standaardwaarden</button>
     </div>
-    <p class="hint">Print de PDF op 100 % (werkelijke grootte, niet “passend maken”) en meet het controleblokje van 10 × 10 cm na. HPGL gebruikt 40 eenheden per mm, pen 1 = snijlijnen en tekst, pen 2 = kraslijnen en maatlijnen.</p>
+    <p class="hint">“Printen” opent de PDF in een nieuw tabblad. Print op A4 of A3 op 100 % (werkelijke grootte, niet “passend maken”) en meet het controleblok van 10 × 10 cm na. Staand of liggend wordt automatisch gekozen voor zo weinig mogelijk bladen; kleef de bladen samen op de paskruisjes in de overlap. HPGL gebruikt 40 eenheden per mm, pen 1 = snijlijnen en tekst, pen 2 = kraslijnen en maatlijnen.</p>
   </div>
 </div>
 </main>
@@ -487,7 +490,7 @@ const lvl = (z, o) => Object.assign({ id: uid++, z, type: 'rect', w: 10, d: 8, n
 function defaults() {
   return {
     mode: 'silhouet',
-    settings: { krimp: 12, t: 0.8, ref: 'buiten', marge: false, margeCm: 1 },
+    settings: { krimp: 12, t: 0.8, ref: 'buiten', marge: false, margeCm: 1, paper: 'A4' },
     sil: { pts: PRESETS.trap.pts.map(p => p.slice()), open: PRESETS.trap.open.slice(), depth: 8, pieces: false, joint: 'verstek',
       sym: { on: false, axis: 0, half: [], hopen: [], top: true, bottom: false } },
     sec: { diamRef: 'hoek', sym: false, levels: [lvl(0, { w: 8, d: 6 }), lvl(15, { w: 14, d: 10 }), lvl(25, { w: 7, d: 5 })] },
@@ -757,7 +760,7 @@ function toSVG(lay, title) {
   return out + '</g>\n</svg>\n';
 }
 
-/* ================= PDF (A4-tegels) ================= */
+/* ================= PDF (tegels op A4 of A3) ================= */
 const WINANSI = { '–': 0x96, '—': 0x97, '→': null, '−': 0x2d, '·': 0xb7, '°': 0xb0, '×': 0xd7, '…': 0x85 };
 function pdfStr(s) {
   let o = '';
@@ -772,9 +775,20 @@ function pdfStr(s) {
 }
 function textWidth(t, size) { return [...String(t)].length * size * 0.53; }
 
-function toPDF(lay) {
-  const k = 72 / 25.4, PW = 210, PH = 297, MG = 10, OV = 10, AW = PW - 2 * MG, AH = PH - 2 * MG, SX = AW - OV, SY = AH - OV;
-  const nx = lay.W <= AW ? 1 : Math.ceil((lay.W - OV) / SX), ny = lay.H <= AH ? 1 : Math.ceil((lay.H - OV) / SY);
+const PAPER = { A4: [210, 297], A3: [297, 420] };
+/** Aantal bladen voor een tekening van W × H mm op een blad van pw × ph mm (marge 10, overlap 10). */
+function tileCount(W, H, pw, ph) {
+  const AW = pw - 20, AH = ph - 20;
+  const nx = W <= AW ? 1 : Math.ceil((W - 10) / (AW - 10)), ny = H <= AH ? 1 : Math.ceil((H - 10) / (AH - 10));
+  return { nx, ny, n: nx * ny };
+}
+function toPDF(lay, paper = 'A4') {
+  const [a, b] = PAPER[paper] || PAPER.A4;
+  // staand of liggend: kies wat de minste bladen geeft
+  const portrait = tileCount(lay.W, lay.H, a, b).n <= tileCount(lay.W, lay.H, b, a).n;
+  const PW = portrait ? a : b, PH = portrait ? b : a;
+  const k = 72 / 25.4, MG = 10, OV = 10, AW = PW - 2 * MG, AH = PH - 2 * MG, SX = AW - OV, SY = AH - OV;
+  const { nx, ny } = tileCount(lay.W, lay.H, PW, PH);
   const reg = [];
   const cross = (x, y) => { reg.push({ k: 'poly', s: 'reg', pts: [[x - 3, y], [x + 3, y]] }, { k: 'poly', s: 'reg', pts: [[x, y - 3], [x, y + 3]] }); };
   for (let c = 1; c < nx; c++) for (let y = 15; y < ny * SY + OV; y += 45) cross(c * SX + OV / 2, y);
@@ -817,7 +831,7 @@ function toPDF(lay) {
     if (c > 0) s += `${n2((MG + OV) * k)} ${n2(MG * k)} m ${n2((MG + OV) * k)} ${n2((MG + AH) * k)} l S\n` + tx(MG + 1, MG + AH + 5, '<- overlap met ' + label(r, c - 1));
     if (r < ny - 1) s += `${n2(MG * k)} ${n2((PH - MG - SY) * k)} m ${n2((MG + AW) * k)} ${n2((PH - MG - SY) * k)} l S\n` + tx(MG + AW / 2 - 15, MG + AH + 5, 'overlap met ' + label(r + 1, c) + ' (onder)');
     if (r > 0) s += `${n2(MG * k)} ${n2((PH - MG - OV) * k)} m ${n2((MG + AW) * k)} ${n2((PH - MG - OV) * k)} l S\n` + tx(MG + AW - 42, 6.5, 'overlap met ' + label(r - 1, c) + ' (boven)');
-    s += tx(MG, 6.5, `Slab-vaas · blad ${label(r, c)} (${pages.length + 1}/${nx * ny}) · ${ny} rij(en) × ${nx} kolom(men) · print op 100 %`, 8);
+    s += tx(MG, 6.5, `Slab-vaas · blad ${label(r, c)} (${pages.length + 1}/${nx * ny}) · ${ny} rij(en) × ${nx} kolom(men) · ${paper} ${portrait ? 'staand' : 'liggend'} · print op 100 % (werkelijke grootte)`, 8);
     pages.push(s);
   }
   // assemble
@@ -842,7 +856,7 @@ function toPDF(lay) {
   out += `trailer\n<< /Size ${objs.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   const bytes = new Uint8Array(out.length);
   for (let i = 0; i < out.length; i++) bytes[i] = out.charCodeAt(i) & 255;
-  return { bytes, pages: pages.length };
+  return { bytes, pages: pages.length, portrait };
 }
 
 /* ================= HPGL ================= */
@@ -1577,7 +1591,7 @@ function syncInputs() {
   const s = state.settings;
   $('s-krimp').value = String(s.krimp).replace('.', ',');
   $('s-t').value = String(s.t).replace('.', ',');
-  $('s-ref').value = s.ref; $('s-marge').checked = !!s.marge;
+  $('s-ref').value = s.ref; $('s-marge').checked = !!s.marge; $('s-paper').value = s.paper || 'A4';
   $('s-margecm').value = String(s.margeCm).replace('.', ',');
   $('sil-depth').value = String(state.sil.depth).replace('.', ',');
   $('sil-pieces').checked = !!state.sil.pieces;
@@ -1681,7 +1695,16 @@ function init() {
     btn.textContent = 'Gekopieerd ✓'; setTimeout(() => { btn.textContent = 'Kopieer maten'; }, 1500);
   });
   $('ex-svg').addEventListener('click', () => { const l = exportLayout(); if (l) download(baseName() + '.svg', toSVG(l, 'Slab-vaas mallen'), 'image/svg+xml'); });
-  $('ex-pdf').addEventListener('click', () => { const l = exportLayout(); if (l) download(baseName() + '.pdf', new Blob([toPDF(l).bytes], { type: 'application/pdf' })); });
+  const pdfBlob = () => { const l = exportLayout(); if (!l) return null; const paper = state.settings.paper || 'A4'; return { blob: new Blob([toPDF(l, paper).bytes], { type: 'application/pdf' }), name: `${baseName()}-${paper}.pdf` }; };
+  $('ex-pdf').addEventListener('click', () => { const r = pdfBlob(); if (r) download(r.name, r.blob); });
+  $('ex-print').addEventListener('click', () => {
+    const r = pdfBlob(); if (!r) return;
+    // open de PDF in een nieuw tabblad om te printen; lukt dat niet (popup geblokkeerd), dan downloaden
+    const url = URL.createObjectURL(r.blob), w = window.open(url, '_blank');
+    if (!w) download(r.name, r.blob);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  });
+  bind('s-paper', el => { state.settings.paper = el.value; }, 'change');
   $('ex-hpgl').addEventListener('click', () => { const l = exportLayout(false); if (l) download(baseName() + '.hpgl', toHPGL(l), 'application/vnd.hp-hpgl'); });
   $('save-json').addEventListener('click', () => download(baseName() + '.json', JSON.stringify({ app: 'slab-vaas', version: 1, state }, null, 2), 'application/json'));
   $('load-json').addEventListener('click', () => $('file-json').click());

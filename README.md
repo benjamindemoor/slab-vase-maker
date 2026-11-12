@@ -29,7 +29,8 @@ Tik op een mal om hem schermvullend te bekijken. Je kunt zoomen (knijpen of scro
 
 ## Export
 - SVG op ware grootte (mm)
-- PDF over A4-pagina's, met overlapstroken, paskruisjes en een controleblok van 10 × 10 cm
+- PDF op **A4 of A3** (staand of liggend, automatisch het minste aantal bladen), met overlapstroken, paskruisjes en een controleblok van 10 × 10 cm
+- **Printen**: opent die PDF in een nieuw tabblad; print op 100 % (werkelijke grootte)
 - HPGL voor een Roland-penplotter (40 eenheden/mm; pen 1 = snijlijnen en tekst, pen 2 = kras- en maatlijnen)
 - maten als platte tekst kopiëren
 - ontwerp opslaan en laden als JSON, met automatische opslag in localStorage
