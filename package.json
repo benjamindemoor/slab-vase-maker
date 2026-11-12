@@ -1,0 +1,8 @@
+{
+  "name": "slab-vaas",
+  "private": true,
+  "description": "Mallengenerator voor hoekige vazen uit kleiplaten",
+  "scripts": {
+    "test": "node tests/geometry.test.js"
+  }
+}

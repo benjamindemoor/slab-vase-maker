@@ -1,0 +1,1245 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slab-vaas mallen</title>
+<style>
+:root{
+  --bg:#f6f2ec; --card:#fffdf9; --ink:#2a2420; --muted:#7a6e64; --line:#e3dace;
+  --accent:#b5653c; --accent-ink:#fff; --score:#2f6fb0; --seam:#d08a1e; --warn:#a33b2b;
+  --grid:#efe7dc; --grid2:#ddd0c0; --clay:#c9825b;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--ink);color:#fff;padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+header h1{font-size:17px;margin:0;font-weight:600;letter-spacing:.2px}
+.tabs{display:flex;gap:4px;background:#ffffff1a;border-radius:9px;padding:3px}
+.tabs button{border:0;background:transparent;color:#fff;padding:6px 12px;border-radius:7px;font:inherit;cursor:pointer}
+.tabs button.on{background:#fff;color:var(--ink)}
+main{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;padding:14px 16px 40px;max-width:1500px;margin:0 auto}
+@media(min-width:980px){main{grid-template-columns:minmax(380px,5fr) minmax(0,7fr)}}
+.col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+.card h2{font-size:15px;margin:0 0 10px;font-weight:650}
+.card h3{font-size:13px;margin:12px 0 6px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.row{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:end}
+label.f{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:3px}
+input[type=text],input[type=number],select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--ink);min-width:0}
+input.num{width:76px}
+input.sm{width:58px}
+label.chk{display:flex;gap:6px;align-items:center;font-size:14px}
+button.b{font:inherit;border:1px solid var(--line);background:#fff;color:var(--ink);padding:7px 12px;border-radius:8px;cursor:pointer}
+button.b:hover{border-color:var(--accent)}
+button.p{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.x{border:0;background:transparent;color:var(--muted);font-size:18px;cursor:pointer;padding:2px 6px}
+.btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.hint{font-size:12px;color:var(--muted);margin:6px 0 0}
+#editor{width:100%;aspect-ratio:1/1;max-height:62vh;display:block;border:1px solid var(--line);border-radius:8px;touch-action:none;background:#fff;cursor:crosshair}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:3px 4px;text-align:left;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600;font-size:12px}
+td input[type=text]{width:64px;padding:4px 6px}
+tr.sel td{background:#fbeee4}
+.tablewrap{overflow-x:auto}
+#levels{display:flex;flex-direction:column;gap:6px}
+.lvl{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:end;border:1px solid var(--line);border-radius:9px;padding:8px;background:#fff}
+.lvl.dragging{opacity:.85;box-shadow:0 6px 18px #0002;border-color:var(--accent)}
+.handle{cursor:grab;touch-action:none;user-select:none;font-size:20px;color:var(--muted);padding:2px 6px;align-self:center}
+.lvl .idx{font-weight:600;align-self:center;min-width:22px}
+#view3d{width:100%;height:320px;display:block;touch-action:none;cursor:grab;background:linear-gradient(#fff,#f3ece3);border-radius:8px}
+.parts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.part{border:1px solid var(--line);border-radius:9px;padding:8px;background:#fff}
+.part h4{margin:0 0 4px;font-size:13px}
+.part canvas{width:100%;display:block}
+pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0;max-height:520px;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px}
+#msgs:empty{display:none}
+#msgs{color:var(--warn);font-size:13px;background:#fbe9e4;border:1px solid #efc6bc;border-radius:8px;padding:8px 10px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin-bottom:8px}
+.legend i{display:inline-block;width:22px;height:0;border-top:2px solid var(--ink);vertical-align:middle;margin-right:4px}
+.legend i.s{border-top:2px dashed var(--score)}
+.legend i.m{border-top:2px dashed var(--seam)}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>Slab-vaas mallen</h1>
+  <div class="tabs" role="tablist">
+    <button id="tab-sil" data-mode="silhouet">Silhouetvaas</button>
+    <button id="tab-sec" data-mode="doorsnede">Facetvaas</button>
+  </div>
+</header>
+
+<main>
+<div class="col">
+  <div class="card">
+    <h2>Instellingen</h2>
+    <div class="row">
+      <label class="f">Krimp %<input type="text" inputmode="decimal" class="num" id="s-krimp"></label>
+      <label class="f">Slabdikte t (cm)<input type="text" inputmode="decimal" class="num" id="s-t"></label>
+      <label class="f">Maten zijn
+        <select id="s-ref"><option value="buiten">buitenmaat</option><option value="binnen">binnenmaat</option></select></label>
+      <label class="chk"><input type="checkbox" id="s-marge"> Naadmarge</label>
+      <label class="f">marge (cm)<input type="text" inputmode="decimal" class="num" id="s-margecm"></label>
+    </div>
+    <p class="hint">Je voert de gebakken maten in. Alle uitvoer wordt vergroot met 1/(1 − krimp). Slabdikte = de dikte die je uitrolt.</p>
+  </div>
+
+  <!-- MODUS 1 -->
+  <div class="card mode-sil">
+    <h2>Silhouet van het voorpaneel</h2>
+    <canvas id="editor"></canvas>
+    <p class="hint">Tik op een lege plek: punt achteraan toevoegen. Tik vlak bij een rand: punt in die rand invoegen. Sleep een punt om het te verplaatsen. Alles snapt op 0,5 cm. y = 0 is de onderkant.</p>
+    <div class="btns">
+      <button class="b" id="pt-del">Geselecteerd punt verwijderen</button>
+      <button class="b" id="pt-clear">Alles wissen</button>
+      <select id="preset"><option value="">Voorbeeld laden…</option><option value="trap">Omgekeerd trapezium</option><option value="zig">Zigzag</option><option value="fles">Fles (holle hoeken)</option></select>
+    </div>
+    <h3>Punten</h3>
+    <div class="tablewrap"><table id="pt-table"></table></div>
+    <div class="btns"><button class="b" id="pt-add">+ punt</button></div>
+    <p class="hint">“Open” geldt voor de rand van dit punt naar het volgende. Open randen krijgen geen zijstrook.</p>
+    <h3>Vaas</h3>
+    <div class="row">
+      <label class="f">Diepte (cm)<input type="text" inputmode="decimal" class="num" id="sil-depth"></label>
+      <label class="chk"><input type="checkbox" id="sil-pieces"> Zijstrook in losse stukken per rand</label>
+    </div>
+  </div>
+
+  <!-- MODUS 2 -->
+  <div class="card mode-sec">
+    <h2>Niveaus (van onder naar boven)</h2>
+    <div id="levels"></div>
+    <div class="btns">
+      <button class="b" id="lv-add">+ niveau</button>
+      <label class="f">Diameter n-hoek gemeten over
+        <select id="sec-diamref"><option value="hoek">de hoekpunten</option><option value="vlak">de vlakken</option></select></label>
+    </div>
+    <p class="hint">Sleep aan ⠿ om een doorsnede naar een andere hoogte te verplaatsen. De z-waarden blijven op hun plaats, de vormen wisselen. Alle doorsneden moeten evenveel zijden hebben (rechthoek = 4).</p>
+  </div>
+</div>
+
+<div class="col">
+  <div id="msgs"></div>
+  <div class="card">
+    <h2>3D-voorbeeld</h2>
+    <canvas id="view3d"></canvas>
+    <p class="hint">Sleep om te draaien.</p>
+  </div>
+  <div class="card">
+    <h2>Mallen</h2>
+    <div class="legend"><span><i></i>snijlijn</span><span><i class="s"></i>kras-/vouwlijn</span><span><i class="m"></i>naadmarge</span></div>
+    <div class="parts" id="parts"></div>
+  </div>
+  <div class="card">
+    <h2>Maten</h2>
+    <pre id="report"></pre>
+    <div class="btns"><button class="b p" id="copy">Kopieer maten</button></div>
+  </div>
+  <div class="card">
+    <h2>Export &amp; opslaan</h2>
+    <div class="btns">
+      <button class="b p" id="ex-svg">SVG 1:1</button>
+      <button class="b p" id="ex-pdf">PDF (A4-tegels)</button>
+      <button class="b" id="ex-hpgl">HPGL (penplotter)</button>
+    </div>
+    <div class="btns">
+      <button class="b" id="save-json">Ontwerp opslaan (JSON)</button>
+      <button class="b" id="load-json">Ontwerp laden…</button>
+      <input type="file" id="file-json" accept=".json,application/json" class="hide">
+      <button class="b" id="reset">Standaardwaarden</button>
+    </div>
+    <p class="hint">Print de PDF op 100 % (werkelijke grootte, niet “passend maken”) en meet het controleblokje van 10 × 10 cm na. HPGL gebruikt 40 eenheden per mm, pen 1 = snijlijnen en tekst, pen 2 = kraslijnen en maatlijnen.</p>
+  </div>
+</div>
+</main>
+
+<script>
+/*GEO-START*/
+const Geo = (() => {
+  'use strict';
+  const DEG = 180 / Math.PI;
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+  const add = (a, b) => [a[0] + b[0], a[1] + b[1]];
+  const mul = (a, k) => [a[0] * k, a[1] * k];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+  const cross = (a, b) => a[0] * b[1] - a[1] * b[0];
+  const len = a => Math.hypot(a[0], a[1]);
+  const unit = a => { const l = len(a) || 1; return [a[0] / l, a[1] / l]; };
+  const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const unit3 = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const clamp1 = v => Math.max(-1, Math.min(1, v));
+
+  function signedArea(pts) {
+    let s = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], q = pts[(i + 1) % pts.length];
+      s += p[0] * q[1] - q[0] * p[1];
+    }
+    return s / 2;
+  }
+  const isCCW = pts => signedArea(pts) >= 0;
+  const edgeLengths = pts => pts.map((p, i) => len(sub(pts[(i + 1) % pts.length], p)));
+
+  /** Outward unit normal of edge i (orientation aware). */
+  function edgeNormal(pts, i) {
+    const e = unit(sub(pts[(i + 1) % pts.length], pts[i]));
+    const s = isCCW(pts) ? 1 : -1;
+    return [s * e[1], -s * e[0]];
+  }
+
+  /** Interior angle (degrees) at every vertex; > 180 means a hollow (reflex) corner. */
+  function interiorAngles(pts) {
+    const n = pts.length, ccw = isCCW(pts);
+    return pts.map((p, i) => {
+      const e1 = sub(p, pts[(i - 1 + n) % n]), e2 = sub(pts[(i + 1) % n], p);
+      let turn = Math.atan2(cross(e1, e2), dot(e1, e2));
+      if (!ccw) turn = -turn;
+      return 180 - turn * DEG;
+    });
+  }
+
+  /** Unit vector from vertex i into the polygon interior. */
+  function inwardBisector(pts, i) {
+    const n = pts.length, s = isCCW(pts) ? 1 : -1;
+    const e1 = unit(sub(pts[i], pts[(i - 1 + n) % n])), e2 = unit(sub(pts[(i + 1) % n], pts[i]));
+    const l1 = [-s * e1[1], s * e1[0]], l2 = [-s * e2[1], s * e2[0]];
+    const b = add(l1, l2);
+    return len(b) < 1e-9 ? l1 : unit(b);
+  }
+
+  /** Move every edge i outward by dists[i] (mitre joins). Works for concave polygons. */
+  function offsetPolygon(pts, dists) {
+    const n = pts.length;
+    const lines = pts.map((p, i) => {
+      const nr = edgeNormal(pts, i);
+      return { p: add(p, mul(nr, dists[i])), e: unit(sub(pts[(i + 1) % n], p)), nr };
+    });
+    return pts.map((p, i) => {
+      const A = lines[(i - 1 + n) % n], B = lines[i];
+      const c = cross(A.e, B.e);
+      if (Math.abs(c) < 1e-9) return add(p, mul(B.nr, dists[i]));
+      const t = cross(sub(B.p, A.p), B.e) / c;
+      return add(A.p, mul(A.e, t));
+    });
+  }
+
+  function segIntersect(a, b, c, d) {
+    const r = sub(b, a), s = sub(d, c), den = cross(r, s);
+    if (Math.abs(den) < 1e-12) return false;
+    const t = cross(sub(c, a), s) / den, u = cross(sub(c, a), r) / den;
+    return t > 1e-9 && t < 1 - 1e-9 && u > 1e-9 && u < 1 - 1e-9;
+  }
+  function selfIntersects(pts) {
+    const n = pts.length;
+    for (let i = 0; i < n; i++) for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue;
+      if (segIntersect(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n])) return true;
+    }
+    return false;
+  }
+
+  const shrinkFactor = krimp => 1 / (1 - (krimp || 0) / 100);
+
+  /* ---------- Modus 1: silhouetvaas ---------- */
+  function silhouette(sil, st) {
+    const warnings = [];
+    const s = shrinkFactor(st.krimp), t = st.t || 0;
+    if (!sil.pts || sil.pts.length < 3) return { error: 'Teken minstens 3 punten.' };
+    let pts = sil.pts.map(p => [p[0] * s, p[1] * s]);
+    const n = pts.length;
+    const open = pts.map((_, i) => !!(sil.open && sil.open[i]));
+    let depth = sil.depth * s;
+    if (Math.abs(signedArea(pts)) < 1e-9) return { error: 'De vorm heeft geen oppervlakte.' };
+    if (edgeLengths(pts).some(l => l < 1e-9)) return { error: 'Twee opeenvolgende punten liggen op dezelfde plaats.' };
+    if (selfIntersects(pts)) warnings.push('De omtrek snijdt zichzelf: controleer de volgorde van de punten.');
+    if (st.ref === 'binnen') { pts = offsetPolygon(pts, open.map(o => (o ? 0 : t))); depth += 2 * t; }
+    const lengths = edgeLengths(pts), angles = interiorAngles(pts);
+    const stripWidth = depth - 2 * t;
+    if (stripWidth <= 0) warnings.push('De diepte is te klein voor deze slabdikte.');
+    let closedLen = 0;
+    lengths.forEach((l, i) => { if (!open[i]) closedLen += l; });
+
+    const runs = [];
+    const makeRun = (edges, loop) => {
+      let pos = 0;
+      const pieces = edges.map(e => { const p = { edge: e, from: e, to: (e + 1) % n, len: lengths[e], start: pos }; pos += lengths[e]; return p; });
+      const folds = pieces.slice(1).map(p => ({ vertex: p.from, angle: angles[p.from], at: p.start, kind: angles[p.from] < 180 ? 'buitenhoek' : 'binnenhoek' }));
+      return { loop, edges, pieces, folds, length: pos, startVertex: edges[0], endVertex: (edges[edges.length - 1] + 1) % n,
+        closeAngle: loop ? angles[edges[0]] : null };
+    };
+    if (open.every(o => !o)) runs.push(makeRun(pts.map((_, i) => i), true));
+    else if (open.every(o => o)) warnings.push('Alle randen zijn open: er is geen zijstrook.');
+    else {
+      for (let i = 0; i < n; i++) {
+        if (!open[i] && open[(i - 1 + n) % n]) {
+          const edges = []; let j = i;
+          while (!open[j]) { edges.push(j); j = (j + 1) % n; }
+          runs.push(makeRun(edges, false));
+        }
+      }
+    }
+    const cut = st.marge ? offsetPolygon(pts, open.map(o => (o ? 0 : st.margeCm || 0))) : null;
+    return { s, t, pts, open, lengths, angles, depth, stripWidth, closedLen, runs, cut, warnings };
+  }
+
+  /* ---------- Modus 2: gestapelde doorsneden ---------- */
+  function sectionPolygon(lv, s, st, diamRef) {
+    const t = st.t || 0, binnen = st.ref === 'binnen';
+    const cx = (lv.dx || 0) * s, cy = (lv.dy || 0) * s;
+    let pts;
+    if (lv.type === 'ngon') {
+      const n = Math.max(3, Math.round(lv.n || 3)), c = Math.cos(Math.PI / n);
+      let r = (lv.diam || 0) * s / 2;
+      if (diamRef === 'vlak') r = r / c;
+      if (binnen) r = (r * c + t) / c;
+      pts = [];
+      for (let i = 0; i < n; i++) {
+        const th = -Math.PI / 2 - Math.PI / n + i * 2 * Math.PI / n;
+        pts.push([r * Math.cos(th), r * Math.sin(th)]);
+      }
+    } else {
+      let W = (lv.w || 0) * s, D = (lv.d || 0) * s;
+      if (binnen) { W += 2 * t; D += 2 * t; }
+      pts = [[-W / 2, -D / 2], [W / 2, -D / 2], [W / 2, D / 2], [-W / 2, D / 2]];
+    }
+    return pts.map(p => [p[0] + cx, p[1] + cy]);
+  }
+
+  function sections(sec, st) {
+    const s = shrinkFactor(st.krimp), warnings = [];
+    const lv = sec.levels || [];
+    if (lv.length < 2) return { error: 'Minstens 2 niveaus nodig.' };
+    const L = lv.map(l => ({ z: l.z * s, pts: sectionPolygon(l, s, st, sec.diamRef) }));
+    const N = L[0].pts.length;
+    if (L.some(l => l.pts.length !== N)) return { error: 'Alle doorsneden moeten evenveel zijden hebben (rechthoek = 4 zijden).' };
+    for (let k = 0; k + 1 < L.length; k++) if (!(L[k + 1].z > L[k].z)) return { error: 'De hoogtes z moeten van onder naar boven toenemen.' };
+    if (L.some(l => edgeLengths(l.pts).some(x => x < 1e-9))) return { error: 'Een doorsnede heeft een zijde van lengte 0.' };
+    const m = L.length - 1;
+    const allRect = lv.every(l => l.type !== 'ngon');
+    const names = allRect ? ['voor', 'rechts', 'achter', 'links'] : [];
+    const columns = [];
+    for (let i = 0; i < N; i++) {
+      const widths = L.map(l => len(sub(l.pts[(i + 1) % N], l.pts[i])));
+      const segs = [];
+      for (let k = 0; k < m; k++) {
+        const P0 = L[k].pts[i], P1 = L[k].pts[(i + 1) % N], Q0 = L[k + 1].pts[i];
+        const u = unit(sub(P1, P0)), nOut = [u[1], -u[0]];
+        const dz = L[k + 1].z - L[k].z, d = sub(Q0, P0);
+        const a = dot(d, u), off = dot(d, nOut), h = Math.hypot(dz, off);
+        const up = [d[0], d[1], dz];
+        const normal = unit3(cross3([u[0], u[1], 0], up));
+        segs.push({ a, off, dz, h, bottom: widths[k], top: widths[k + 1], normal, up });
+      }
+      let X = 0, Y = 0;
+      const left = [[0, 0]], right = [[widths[0], 0]];
+      segs.forEach((sg, k) => { X += sg.a; Y += sg.h; left.push([X, Y]); right.push([X + widths[k + 1], Y]); });
+      const creases = [];
+      for (let k = 1; k < m; k++) {
+        const knik = Math.acos(clamp1(dot3(segs[k - 1].normal, segs[k].normal))) * DEG;
+        const kind = knik < 0.05 ? 'vlak' : (dot3(segs[k].up, segs[k - 1].normal) < 0 ? 'bol' : 'hol');
+        creases.push({ level: k, knik, between: 180 - knik, kind, y: left[k][1] });
+      }
+      const baseAngle = 90 + Math.atan2(segs[0].off, segs[0].dz) * DEG;
+      columns.push({ label: String.fromCharCode(65 + i), name: names[i] || '', widths, segs, left, right, creases, baseAngle, height: Y });
+    }
+    const seams = [];
+    for (let j = 0; j < N; j++) {
+      const A = columns[(j - 1 + N) % N], B = columns[j];
+      seams.push(B.segs.map((sg, k) => {
+        const knik = Math.acos(clamp1(dot3(A.segs[k].normal, sg.normal))) * DEG;
+        return { between: 180 - knik, bevel: knik / 2 };
+      }));
+    }
+    columns.forEach((c, i) => { c.leftSeam = seams[i]; c.rightSeam = seams[(i + 1) % N]; });
+    const bottom = { pts: L[0].pts, lengths: edgeLengths(L[0].pts), angles: interiorAngles(L[0].pts) };
+    return { s, t: st.t || 0, levels: L, N, columns, bottom, warnings };
+  }
+
+  return { DEG, sub, add, mul, dot, len, unit, signedArea, isCCW, edgeLengths, edgeNormal, interiorAngles,
+    inwardBisector, offsetPolygon, selfIntersects, shrinkFactor, silhouette, sections, sectionPolygon };
+})();
+/*GEO-END*/
+</script>
+
+<script>
+'use strict';
+/* ================= Formatting ================= */
+const f2 = v => (Math.round(v * 100) / 100).toFixed(2).replace('.', ',');
+const f1 = v => (Math.round(v * 10) / 10).toFixed(1).replace('.', ',');
+const num = (v, d = 0) => { const x = parseFloat(String(v).replace(',', '.')); return isFinite(x) ? x : d; };
+const $ = id => document.getElementById(id);
+
+/* ================= State ================= */
+const STORE = 'slabvaas.v1';
+const PRESETS = {
+  trap: { pts: [[9, 0], [21, 0], [30, 18], [0, 18]], open: [false, false, true, false] },
+  zig: { pts: [[6, 0], [18, 0], [22, 8], [18, 14], [24, 24], [0, 24], [6, 14], [2, 8]], open: [false, false, false, false, true, false, false, false] },
+  fles: { pts: [[5, 0], [17, 0], [20, 12], [15, 18], [14, 27], [8, 27], [7, 18], [2, 12]], open: [false, false, false, false, true, false, false, false] },
+};
+let uid = 1;
+const lvl = (z, o) => Object.assign({ id: uid++, z, type: 'rect', w: 10, d: 8, n: 6, diam: 10, dx: 0, dy: 0 }, o);
+function defaults() {
+  return {
+    mode: 'silhouet',
+    settings: { krimp: 12, t: 0.8, ref: 'buiten', marge: false, margeCm: 1 },
+    sil: { pts: PRESETS.trap.pts.map(p => p.slice()), open: PRESETS.trap.open.slice(), depth: 8, pieces: false },
+    sec: { diamRef: 'hoek', levels: [lvl(0, { w: 8, d: 6 }), lvl(15, { w: 14, d: 10 }), lvl(25, { w: 7, d: 5 })] },
+  };
+}
+let state = defaults();
+function loadState(obj) {
+  const d = defaults();
+  const st = Object.assign(d, obj || {});
+  st.settings = Object.assign(defaults().settings, (obj || {}).settings || {});
+  st.sil = Object.assign(defaults().sil, (obj || {}).sil || {});
+  st.sec = Object.assign(defaults().sec, (obj || {}).sec || {});
+  st.sec.levels = st.sec.levels.map(l => lvl(l.z, l));
+  while (st.sil.open.length < st.sil.pts.length) st.sil.open.push(false);
+  st.sil.open.length = st.sil.pts.length;
+  state = st;
+}
+try { const raw = localStorage.getItem(STORE); if (raw) loadState(JSON.parse(raw)); } catch (e) { /* geen opslag */ }
+let saveTimer = null;
+function persist() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* negeren */ } }, 300);
+}
+
+/* ================= Drawing primitives =================
+   Parts are built in cm with y pointing up.
+   {k:'poly', pts, closed, s:'cut'|'score'|'dim'|'seam'}  {k:'text', x, y, t, size(cm), a:'start'|'middle'|'end', rot(deg ccw), title?} */
+const P = (pts, s = 'cut', closed = false) => ({ k: 'poly', pts, s, closed });
+const T = (x, y, t, o = {}) => Object.assign({ k: 'text', x, y, t, size: 0.32, a: 'middle', rot: 0 }, o);
+const readable = e => { let a = Math.atan2(e[1], e[0]) * Geo.DEG; if (a > 90.01) a -= 180; if (a <= -90.01) a += 180; return a; };
+
+function dimPrims(p, q, nrm, off, label) {
+  const { add, mul, sub, unit } = Geo;
+  const a = add(p, mul(nrm, off)), b = add(q, mul(nrm, off));
+  const e = unit(sub(q, p)), tk = mul(unit(add(e, nrm)), 0.18);
+  const mid = mul(add(a, b), 0.5);
+  return [
+    P([add(p, mul(nrm, 0.12)), add(p, mul(nrm, off + 0.2))], 'dim'),
+    P([add(q, mul(nrm, 0.12)), add(q, mul(nrm, off + 0.2))], 'dim'),
+    P([a, b], 'dim'), P([sub(a, tk), add(a, tk)], 'dim'), P([sub(b, tk), add(b, tk)], 'dim'),
+    T(...add(mid, mul(nrm, 0.32)), label, { rot: readable(e) }),
+  ];
+}
+
+function bbox(prims) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const inc = (x, y) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); };
+  prims.forEach(p => {
+    if (p.k === 'poly') p.pts.forEach(q => inc(q[0], q[1]));
+    else {
+      const w = p.t.length * p.size * 0.55, h = p.size;
+      const c = Math.cos(p.rot / Geo.DEG), s = Math.sin(p.rot / Geo.DEG);
+      const f = p.a === 'middle' ? 0.5 : p.a === 'end' ? 1 : 0;
+      [[-f * w, -h / 2], [(1 - f) * w, -h / 2], [-f * w, h / 2], [(1 - f) * w, h / 2]].forEach(([u, v]) => inc(p.x + u * c - v * s, p.y + u * s + v * c));
+    }
+  });
+  return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 };
+}
+
+function makePart(title, prims) {
+  const bb = bbox(prims);
+  prims.push(T(bb.x0, bb.y1 + 0.7, title, { size: 0.5, a: 'start', title: true }));
+  return { title, prims, bb: bbox(prims) };
+}
+
+/* ---------- Parts: modus 1 ---------- */
+function polygonPrims(pts, lengths, angles, open, cut, names) {
+  const { add, mul, edgeNormal, inwardBisector } = Geo;
+  const n = pts.length, pr = [P(pts, 'cut', true)];
+  if (cut) pr.push(P(cut, 'seam', true));
+  const extra = cut ? (num(state.settings.margeCm) || 0) : 0;
+  for (let i = 0; i < n; i++) {
+    const q = pts[(i + 1) % n];
+    pr.push(...dimPrims(pts[i], q, edgeNormal(pts, i), 0.7 + (open && open[i] ? 0 : extra), f2(lengths[i]) + (open && open[i] ? ' open' : '')));
+  }
+  for (let i = 0; i < n; i++) {
+    const b = inwardBisector(pts, i);
+    pr.push(T(...add(pts[i], mul(b, 1.15)), f1(angles[i]) + '°', { size: 0.28 }));
+    if (names) pr.push(T(...add(pts[i], mul(b, -0.45)), names[i], { size: 0.26 }));
+  }
+  return pr;
+}
+
+function silParts(r) {
+  const parts = [];
+  const names = r.pts.map((_, i) => 'P' + (i + 1));
+  parts.push(makePart('Voorpaneel', polygonPrims(r.pts, r.lengths, r.angles, r.open, r.cut, names)));
+  const mir = p => p.map(q => [-q[0], q[1]]);
+  const mpts = mir(r.pts), mOpen = r.open;
+  parts.push(makePart('Achterpaneel (gespiegeld)', polygonPrims(mpts, r.lengths, Geo.interiorAngles(mpts), mOpen, r.cut ? mir(r.cut) : null, names)));
+  const W = r.stripWidth, m = state.settings.marge ? num(state.settings.margeCm) : 0;
+  if (W <= 0) return parts;
+  r.runs.forEach((run, ri) => {
+    const tag = r.runs.length > 1 ? ' ' + (ri + 1) : '';
+    if (!state.sil.pieces) {
+      const L = run.length, pr = [P([[0, 0], [L, 0], [L, W], [0, W]], 'cut', true)];
+      if (run.loop && m) pr.push(P([[0, 0], [L + m, 0], [L + m, W], [0, W]], 'seam', true));
+      run.pieces.forEach(pc => pr.push(T(pc.start + pc.len / 2, W + 0.4, `${names[pc.from]}→${names[pc.to]}  ${f2(pc.len)}`)));
+      run.folds.forEach(fd => {
+        pr.push(P([[fd.at, 0], [fd.at, W]], 'score'));
+        pr.push(T(fd.at, -0.45, `${f1(fd.angle)}°`, { size: 0.28 }));
+        pr.push(T(fd.at, -0.85, fd.kind === 'buitenhoek' ? 'kras binnen' : 'kras buiten', { size: 0.24 }));
+      });
+      pr.push(...dimPrims([0, 0], [L, 0], [0, -1], 1.5, 'lengte ' + f2(L)));
+      pr.push(...dimPrims([0, W], [0, 0], [-1, 0], 0.6, 'breedte ' + f2(W)));
+      if (run.loop) pr.push(T(L / 2, W / 2, `gesloten ring: sluitnaad bij ${names[run.startVertex]} (${f1(run.closeAngle)}°)`, { size: 0.26 }));
+      parts.push(makePart('Zijstrook' + tag + ' (uitgerold)', pr));
+    } else {
+      run.pieces.forEach((pc, k) => {
+        const L = pc.len, pr = [P([[0, 0], [L, 0], [L, W], [0, W]], 'cut', true)];
+        const joinStart = run.loop || k > 0, joinEnd = run.loop || k < run.pieces.length - 1;
+        if (m) pr.push(P([[joinStart ? -m : 0, 0], [L + (joinEnd ? m : 0), 0], [L + (joinEnd ? m : 0), W], [joinStart ? -m : 0, W]], 'seam', true));
+        const bev = v => `verstek ${f1(Math.abs(180 - r.angles[v]) / 2)}°`;
+        if (joinStart) pr.push(T(0.2, W / 2, bev(pc.from), { size: 0.24, rot: 90 }));
+        if (joinEnd) pr.push(T(L - 0.2, W / 2, bev(pc.to), { size: 0.24, rot: 90 }));
+        pr.push(T(L / 2, W + 0.4, `${names[pc.from]}→${names[pc.to]}`));
+        pr.push(...dimPrims([0, 0], [L, 0], [0, -1], 0.7, f2(L)));
+        pr.push(...dimPrims([0, W], [0, 0], [-1, 0], 0.6, f2(W)));
+        parts.push(makePart(`Zijstrook${tag} · stuk ${k + 1}`, pr));
+      });
+    }
+  });
+  return parts;
+}
+
+/* ---------- Parts: modus 2 ---------- */
+function secParts(r) {
+  const parts = [];
+  const m = state.settings.marge ? num(state.settings.margeCm) : 0;
+  r.columns.forEach(c => {
+    const nseg = c.segs.length;
+    const outline = [...c.left, ...c.right.slice().reverse()];
+    const pr = [P(outline, 'cut', true)];
+    if (m) {
+      const d = outline.map((_, i) => (i < nseg || (i > nseg && i <= 2 * nseg) ? m : 0));
+      pr.push(P(Geo.offsetPolygon(outline, d), 'seam', true));
+    }
+    c.creases.forEach(cr => {
+      const k = cr.level;
+      pr.push(P([c.left[k], c.right[k]], 'score'));
+      pr.push(T((c.left[k][0] + c.right[k][0]) / 2, cr.y - 0.45, `knik ${f1(cr.knik)}° ${cr.kind}`, { size: 0.27 }));
+    });
+    c.widths.forEach((w, k) => {
+      const y = c.left[k][1], x = (c.left[k][0] + c.right[k][0]) / 2;
+      pr.push(T(x, k === nseg ? y - 0.45 : y + 0.45, f2(w)));
+    });
+    const minX = Math.min(...c.left.map(p => p[0]));
+    c.segs.forEach((sg, k) => {
+      pr.push(...dimPrims([minX, c.left[k + 1][1]], [minX, c.left[k][1]], [-1, 0], 0.8 + (m || 0), 'h ' + f2(sg.h)));
+      const lm = Geo.mul(Geo.add(c.left[k], c.left[k + 1]), 0.5), rm = Geo.mul(Geo.add(c.right[k], c.right[k + 1]), 0.5);
+      const le = Geo.sub(c.left[k + 1], c.left[k]), re = Geo.sub(c.right[k + 1], c.right[k]);
+      pr.push(T(lm[0] + 0.35, lm[1], `afs. ${f1(c.leftSeam[k].bevel)}°`, { size: 0.24, rot: readable(le) }));
+      pr.push(T(rm[0] - 0.35, rm[1], `afs. ${f1(c.rightSeam[k].bevel)}°`, { size: 0.24, rot: readable(re) }));
+    });
+    pr.push(T(c.right[0][0] / 2, -0.5, `hoek bodem–wand ${f1(c.baseAngle)}°`, { size: 0.26 }));
+    parts.push(makePart(`Kolom ${c.label}${c.name ? ' (' + c.name + ')' : ''}`, pr));
+  });
+  const b = r.bottom;
+  const cut = m ? Geo.offsetPolygon(b.pts, b.pts.map(() => m)) : null;
+  parts.push(makePart('Bodemplaat', polygonPrims(b.pts, b.lengths, b.angles, null, cut, null)));
+  return parts;
+}
+
+function controlPart() {
+  return makePart('Controle', [P([[0, 0], [10, 0], [10, 10], [0, 10]], 'cut', true), T(5, 5.3, '10 × 10 cm'), T(5, 4.5, 'meet na het printen', { size: 0.26 })]);
+}
+
+/* ================= Layout (global mm, y down) ================= */
+function layout(parts, maxW = 60) {
+  const gap = 2, mg = 1;
+  maxW = Math.max(maxW, ...parts.map(p => p.bb.w));
+  let x = 0, y = 0, rowH = 0, W = 0;
+  const placed = [];
+  parts.forEach(p => {
+    if (x > 0 && x + p.bb.w > maxW) { x = 0; y += rowH + gap; rowH = 0; }
+    placed.push({ p, ox: x, oy: y });
+    x += p.bb.w + gap; rowH = Math.max(rowH, p.bb.h); W = Math.max(W, x - gap);
+  });
+  const H = y + rowH;
+  const prims = [];
+  placed.forEach(({ p, ox, oy }) => {
+    const tx = q => [(mg + ox + q[0] - p.bb.x0) * 10, (mg + oy + p.bb.y1 - q[1]) * 10];
+    p.prims.forEach(pr => {
+      if (pr.k === 'poly') prims.push(Object.assign({}, pr, { pts: pr.pts.map(tx) }));
+      else { const [X, Y] = tx([pr.x, pr.y]); prims.push(Object.assign({}, pr, { x: X, y: Y, size: pr.size * 10 })); }
+    });
+  });
+  return { prims, W: (W + 2 * mg) * 10, H: (H + 2 * mg) * 10 };
+}
+
+const STYLE = {
+  cut: { w: 0.35, color: '#000', dash: null },
+  score: { w: 0.3, color: '#1f5fa8', dash: [2, 1.5] },
+  dim: { w: 0.15, color: '#666', dash: null },
+  seam: { w: 0.25, color: '#d0801a', dash: [4, 1, 1, 1] },
+  reg: { w: 0.2, color: '#000', dash: null },
+};
+
+/* ================= SVG ================= */
+const xmlEsc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function toSVG(lay, title) {
+  const r3 = v => Math.round(v * 1000) / 1000;
+  let out = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${r3(lay.W)}mm" height="${r3(lay.H)}mm" viewBox="0 0 ${r3(lay.W)} ${r3(lay.H)}">\n<title>${xmlEsc(title)}</title>\n<g fill="none" stroke-linecap="round" stroke-linejoin="round">\n`;
+  lay.prims.forEach(p => {
+    if (p.k !== 'poly') return;
+    const st = STYLE[p.s];
+    const pts = p.pts.map(q => r3(q[0]) + ',' + r3(q[1])).join(' ');
+    out += `<${p.closed ? 'polygon' : 'polyline'} class="${p.s}" points="${pts}" stroke="${st.color}" stroke-width="${st.w}"${st.dash ? ` stroke-dasharray="${st.dash.join(' ')}"` : ''}/>\n`;
+  });
+  out += '</g>\n<g font-family="Helvetica, Arial, sans-serif" fill="#000">\n';
+  lay.prims.forEach(p => {
+    if (p.k !== 'text') return;
+    out += `<text x="${r3(p.x)}" y="${r3(p.y)}" font-size="${r3(p.size)}" text-anchor="${p.a}" dominant-baseline="central"${p.rot ? ` transform="rotate(${r3(-p.rot)} ${r3(p.x)} ${r3(p.y)})"` : ''}${p.title ? ' font-weight="bold"' : ''}>${xmlEsc(p.t)}</text>\n`;
+  });
+  return out + '</g>\n</svg>\n';
+}
+
+/* ================= PDF (A4-tegels) ================= */
+const WINANSI = { '–': 0x96, '—': 0x97, '→': null, '−': 0x2d, '·': 0xb7, '°': 0xb0, '×': 0xd7, '…': 0x85 };
+function pdfStr(s) {
+  let o = '';
+  for (const ch of String(s)) {
+    if (ch === '→') { o += '->'; continue; }
+    let c = WINANSI[ch] !== undefined ? WINANSI[ch] : ch.charCodeAt(0);
+    if (c > 255) c = 63;
+    const x = String.fromCharCode(c);
+    o += (x === '(' || x === ')' || x === '\\') ? '\\' + x : x;
+  }
+  return o;
+}
+function textWidth(t, size) { return [...String(t)].length * size * 0.53; }
+
+function toPDF(lay) {
+  const k = 72 / 25.4, PW = 210, PH = 297, MG = 10, OV = 10, AW = PW - 2 * MG, AH = PH - 2 * MG, SX = AW - OV, SY = AH - OV;
+  const nx = lay.W <= AW ? 1 : Math.ceil((lay.W - OV) / SX), ny = lay.H <= AH ? 1 : Math.ceil((lay.H - OV) / SY);
+  const reg = [];
+  const cross = (x, y) => { reg.push({ k: 'poly', s: 'reg', pts: [[x - 3, y], [x + 3, y]] }, { k: 'poly', s: 'reg', pts: [[x, y - 3], [x, y + 3]] }); };
+  for (let c = 1; c < nx; c++) for (let y = 15; y < ny * SY + OV; y += 45) cross(c * SX + OV / 2, y);
+  for (let r = 1; r < ny; r++) for (let x = 15; x < nx * SX + OV; x += 45) cross(x, r * SY + OV / 2);
+  const all = lay.prims.concat(reg);
+  const n2 = v => (Math.round(v * 100) / 100).toString();
+  const rowName = r => String.fromCharCode(65 + (r % 26));
+  const pages = [];
+  for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) {
+    const ox = c * SX, oy = r * SY;
+    const X = x => (MG + x - ox) * k, Y = y => (PH - (MG + y - oy)) * k;
+    let s = '';
+    s += `q ${n2(MG * k)} ${n2(MG * k)} ${n2(AW * k)} ${n2(AH * k)} re W n\n1 J 1 j\n`;
+    all.forEach(p => {
+      if (p.k === 'poly') {
+        const xs = p.pts.map(q => q[0]), ys = p.pts.map(q => q[1]);
+        if (Math.max(...xs) < ox - 1 || Math.min(...xs) > ox + AW + 1 || Math.max(...ys) < oy - 1 || Math.min(...ys) > oy + AH + 1) return;
+        const st = STYLE[p.s];
+        const hex = st.color.length === 4 ? [...st.color.slice(1)].map(h => h + h) : st.color.slice(1).match(/../g);
+        const col = hex.map(h => n2(parseInt(h, 16) / 255));
+        s += `${col.join(' ')} RG ${n2(st.w * k)} w [${st.dash ? st.dash.map(d => n2(d * k)).join(' ') : ''}] 0 d\n`;
+        s += p.pts.map((q, i) => `${n2(X(q[0]))} ${n2(Y(q[1]))} ${i ? 'l' : 'm'}`).join('\n') + (p.closed ? ' h' : '') + ' S\n';
+      } else {
+        if (p.x < ox - 80 || p.x > ox + AW + 80 || p.y < oy - 80 || p.y > oy + AH + 80) return;
+        const a = p.rot / Geo.DEG, co = Math.cos(a), si = Math.sin(a), sz = p.size * k;
+        const w = textWidth(p.t, sz), f = p.a === 'middle' ? 0.5 : p.a === 'end' ? 1 : 0;
+        const x0 = X(p.x) - co * w * f + si * 0.35 * sz, y0 = Y(p.y) - si * w * f - co * 0.35 * sz;
+        s += `0 g BT /${p.title ? 'F2' : 'F1'} ${n2(sz)} Tf ${n2(co)} ${n2(si)} ${n2(-si)} ${n2(co)} ${n2(x0)} ${n2(y0)} Tm (${pdfStr(p.t)}) Tj ET\n`;
+      }
+    });
+    s += 'Q\n';
+    // frame + overlap markers
+    s += `0.6 G 0.2 w [] 0 d ${n2(MG * k)} ${n2(MG * k)} ${n2(AW * k)} ${n2(AH * k)} re S\n`;
+    s += `0.5 G 0.3 w [3 2] 0 d\n`;
+    const label = (r2, c2) => rowName(r2) + (c2 + 1);
+    const tx = (x, y, t, sz = 7) => `0.35 g BT /F1 ${sz} Tf ${n2(x * k)} ${n2((PH - y) * k)} Td (${pdfStr(t)}) Tj ET\n`;
+    if (c < nx - 1) s += `${n2((MG + SX) * k)} ${n2(MG * k)} m ${n2((MG + SX) * k)} ${n2((MG + AH) * k)} l S\n` + tx(MG + SX - 30, MG + AH + 5, 'overlap met ' + label(r, c + 1) + ' ->');
+    if (c > 0) s += `${n2((MG + OV) * k)} ${n2(MG * k)} m ${n2((MG + OV) * k)} ${n2((MG + AH) * k)} l S\n` + tx(MG + 1, MG + AH + 5, '<- overlap met ' + label(r, c - 1));
+    if (r < ny - 1) s += `${n2(MG * k)} ${n2((PH - MG - SY) * k)} m ${n2((MG + AW) * k)} ${n2((PH - MG - SY) * k)} l S\n` + tx(MG + AW / 2 - 15, MG + AH + 5, 'overlap met ' + label(r + 1, c) + ' (onder)');
+    if (r > 0) s += `${n2(MG * k)} ${n2((PH - MG - OV) * k)} m ${n2((MG + AW) * k)} ${n2((PH - MG - OV) * k)} l S\n` + tx(MG + AW - 42, 6.5, 'overlap met ' + label(r - 1, c) + ' (boven)');
+    s += tx(MG, 6.5, `Slab-vaas · blad ${label(r, c)} (${pages.length + 1}/${nx * ny}) · ${ny} rij(en) × ${nx} kolom(men) · print op 100 %`, 8);
+    pages.push(s);
+  }
+  // assemble
+  const objs = [];
+  objs[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objs[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+  objs[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
+  const kids = [];
+  pages.forEach((content, i) => {
+    const po = 5 + i * 2, co = po + 1;
+    kids.push(po + ' 0 R');
+    objs[po] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n2(PW * k)} ${n2(PH * k)}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${co} 0 R >>`;
+    objs[co] = `<< /Length ${content.length} >>\nstream\n${content}endstream`;
+  });
+  objs[2] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages.length} >>`;
+  let out = '%PDF-1.4\n%\xe2\xe3\xcf\xd3\n';
+  const offs = [];
+  for (let i = 1; i < objs.length; i++) { offs[i] = out.length; out += `${i} 0 obj\n${objs[i]}\nendobj\n`; }
+  const xref = out.length;
+  out += `xref\n0 ${objs.length}\n0000000000 65535 f \n`;
+  for (let i = 1; i < objs.length; i++) out += String(offs[i]).padStart(10, '0') + ' 00000 n \n';
+  out += `trailer\n<< /Size ${objs.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  const bytes = new Uint8Array(out.length);
+  for (let i = 0; i < out.length; i++) bytes[i] = out.charCodeAt(i) & 255;
+  return { bytes, pages: pages.length };
+}
+
+/* ================= HPGL ================= */
+function ascii(s) {
+  return String(s).replace(/→/g, '->').replace(/[–—−]/g, '-').replace(/°/g, ' gr').replace(/×/g, 'x').replace(/·/g, '-')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7e]/g, '?');
+}
+function toHPGL(lay) {
+  const U = 40, H = lay.H;
+  const pt = q => `${Math.round(q[0] * U)},${Math.round((H - q[1]) * U)}`;
+  let out = 'IN;\nDT\x03;\n', pen = 0;
+  const sp = n => { if (pen !== n) { out += `SP${n};\n`; pen = n; } };
+  const dashed = (pts, pattern) => {
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i], b = pts[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      let d = 0, j = 0;
+      while (d < L) {
+        const seg = pattern[j % pattern.length], e = Math.min(L, d + seg);
+        if (j % 2 === 0) {
+          const p1 = [a[0] + (b[0] - a[0]) * d / L, a[1] + (b[1] - a[1]) * d / L], p2 = [a[0] + (b[0] - a[0]) * e / L, a[1] + (b[1] - a[1]) * e / L];
+          out += `PU${pt(p1)};PD${pt(p2)};\n`;
+        }
+        d = e; j++;
+      }
+    }
+  };
+  lay.prims.filter(p => p.k === 'poly').sort((a, b) => (a.s === 'cut') - (b.s === 'cut')).forEach(p => {
+    const pts = p.closed ? p.pts.concat([p.pts[0]]) : p.pts;
+    sp(p.s === 'cut' ? 1 : 2);
+    if (p.s === 'score' || p.s === 'seam') dashed(pts, STYLE[p.s].dash.slice(0, 2).map(v => v * 1.5));
+    else out += `PU${pt(pts[0])};PD${pts.slice(1).map(pt).join(',')};\n`;
+  });
+  sp(1);
+  lay.prims.filter(p => p.k === 'text').forEach(p => {
+    const t = ascii(p.t), cw = p.size * 0.42, chH = p.size * 0.62; // mm
+    const a = p.rot / Geo.DEG, co = Math.cos(a), si = Math.sin(a);
+    const w = t.length * cw * 1.5, f = p.a === 'middle' ? 0.5 : p.a === 'end' ? 1 : 0;
+    // start point in y-down mm coordinates
+    const x0 = p.x - co * w * f + si * chH / 2, y0 = p.y + si * w * f + co * chH / 2;
+    out += `DI${co.toFixed(4)},${si.toFixed(4)};SI${(cw / 10).toFixed(3)},${(chH / 10).toFixed(3)};PU${pt([x0, y0])};LB${t}\x03\n`;
+  });
+  return out + 'PU;SP0;\n';
+}
+
+/* ================= Report (platte tekst) ================= */
+function report(r) {
+  const st = state.settings, s = Geo.shrinkFactor(num(st.krimp));
+  const L = [];
+  const head = `Krimp ${f1(num(st.krimp))} % (maten × ${s.toFixed(4).replace('.', ',')}) · slabdikte ${f2(num(st.t))} cm · invoer = ${st.ref}maat${st.marge ? ' · naadmarge ' + f2(num(st.margeCm)) + ' cm' : ''}`;
+  if (state.mode === 'silhouet') {
+    const names = r.pts.map((_, i) => 'P' + (i + 1));
+    L.push('SLAB-VAAS · SILHOUETVAAS', head, 'Alle maten in cm, op natte (ongebakken) maat.', '');
+    L.push('VOOR- EN ACHTERPANEEL (2×, achterpaneel gespiegeld)');
+    L.push('punt      x       y     hoek');
+    r.pts.forEach((p, i) => L.push(`${names[i].padEnd(5)} ${f2(p[0]).padStart(6)}  ${f2(p[1]).padStart(6)}   ${f1(r.angles[i]).padStart(5)}°${r.angles[i] > 180 ? ' (hol)' : ''}`));
+    L.push('', 'zijde        lengte');
+    r.lengths.forEach((l, i) => L.push(`${(names[i] + '→' + names[(i + 1) % r.pts.length]).padEnd(10)} ${f2(l).padStart(7)}${r.open[i] ? '  open' : ''}`));
+    L.push('', `Diepte vaas: ${f2(r.depth)}`);
+    L.push(`ZIJSTROOK: breedte ${f2(r.stripWidth)} (= diepte − 2t), totale lengte ${f2(r.closedLen)}`);
+    r.runs.forEach((run, ri) => {
+      L.push(`${r.runs.length > 1 ? ' strook ' + (ri + 1) + ': ' : ' '}lengte ${f2(run.length)}${run.loop ? ' (gesloten ring, sluitnaad bij ' + names[run.startVertex] + ', ' + f1(run.closeAngle) + '°)' : ''}`);
+      run.pieces.forEach(pc => L.push(`   ${(names[pc.from] + '→' + names[pc.to]).padEnd(9)} ${f2(pc.len).padStart(7)}   van ${f2(pc.start)} tot ${f2(pc.start + pc.len)}`));
+      run.folds.forEach(fd => L.push(`   vouw bij ${names[fd.vertex]} op ${f2(fd.at)}: hoek ${f1(fd.angle)}° (${fd.kind}, kras ${fd.kind === 'buitenhoek' ? 'binnenkant' : 'buitenkant'})`));
+      if (state.sil.pieces) L.push('   losse stukken: verstek per uiteinde = (180° − hoek) / 2');
+    });
+  } else {
+    L.push('SLAB-VAAS · FACETVAAS (gestapelde doorsneden)', head, 'Alle maten in cm, op natte (ongebakken) maat.', '');
+    L.push('NIVEAUS: ' + r.levels.map(l => 'z ' + f2(l.z)).join(' · '), '');
+    r.columns.forEach(c => {
+      L.push(`MAL KOLOM ${c.label}${c.name ? ' (' + c.name + ')' : ''}`);
+      L.push('  breedte per niveau: ' + c.widths.map(f2).join(' → '));
+      c.segs.forEach((sg, k) => L.push(`  segment ${k + 1}: ware hoogte ${f2(sg.h)} (dz ${f2(sg.dz)}, uitsprong ${f2(sg.off)}, verschuiving langs rand ${f2(sg.a)})`));
+      c.creases.forEach(cr => L.push(`  kraslijn niveau ${cr.level + 1}: knik ${f1(cr.knik)}° ${cr.kind} (hoek tussen vlakken ${f1(cr.between)}°)`));
+      c.segs.forEach((sg, k) => L.push(`  naden segment ${k + 1}: links afschuinen ${f1(c.leftSeam[k].bevel)}° · rechts ${f1(c.rightSeam[k].bevel)}° (hoek tussen vlakken ${f1(c.leftSeam[k].between)}° / ${f1(c.rightSeam[k].between)}°)`));
+      L.push(`  hoek bodem–wand: ${f1(c.baseAngle)}°  · totale malhoogte ${f2(c.height)}`, '');
+    });
+    L.push('BODEMPLAAT (onderste doorsnede)');
+    L.push('  zijden: ' + r.bottom.lengths.map(f2).join(' · '));
+    L.push('  hoeken: ' + r.bottom.angles.map(a => f1(a) + '°').join(' · '));
+    L.push('', 'Afschuinhoek = hoek t.o.v. loodrecht snijden (verstek); bij een rechte hoek 45°.');
+  }
+  return L.join('\n');
+}
+
+/* ================= Compute & render ================= */
+let current = { r: null, parts: [] };
+function compute() {
+  const st = {
+    krimp: num(state.settings.krimp), t: num(state.settings.t), ref: state.settings.ref,
+    marge: state.settings.marge, margeCm: num(state.settings.margeCm),
+  };
+  if (st.krimp >= 100) return { error: 'Krimp moet kleiner zijn dan 100 %.' };
+  if (state.mode === 'silhouet') {
+    return Geo.silhouette({ pts: state.sil.pts, open: state.sil.open, depth: num(state.sil.depth) }, st);
+  }
+  const levels = state.sec.levels.map(l => ({ z: num(l.z), type: l.type, w: num(l.w), d: num(l.d), n: num(l.n, 6), diam: num(l.diam), dx: num(l.dx), dy: num(l.dy) }));
+  return Geo.sections({ levels, diamRef: state.sec.diamRef }, st);
+}
+
+function update() {
+  persist();
+  const r = compute();
+  const msgs = $('msgs');
+  if (r.error) {
+    msgs.textContent = r.error; current = { r: null, parts: [] };
+    $('parts').innerHTML = ''; $('report').textContent = ''; draw3d(); return;
+  }
+  msgs.innerHTML = r.warnings.map(xmlEsc).join('<br>');
+  const parts = state.mode === 'silhouet' ? silParts(r) : secParts(r);
+  current = { r, parts };
+  renderParts(parts);
+  $('report').textContent = report(r);
+  draw3d();
+}
+
+/* ---------- 2D previews ---------- */
+function renderParts(parts) {
+  const box = $('parts');
+  while (box.children.length > parts.length) box.lastChild.remove();
+  while (box.children.length < parts.length) {
+    const d = document.createElement('div'); d.className = 'part';
+    d.innerHTML = '<h4></h4><canvas></canvas>'; box.appendChild(d);
+  }
+  parts.forEach((p, i) => {
+    const el = box.children[i];
+    el.style.gridColumn = p.bb.w > 2.2 * p.bb.h ? '1 / -1' : '';
+    el.querySelector('h4').textContent = `${p.title} · ${f2(p.bb.w)} × ${f2(p.bb.h)} cm`;
+    drawPart(el.querySelector('canvas'), p);
+  });
+}
+function drawPart(cv, part) {
+  const dpr = window.devicePixelRatio || 1;
+  const bb = bbox(part.prims.filter(p => !p.title));
+  const cw = cv.clientWidth || 260;
+  const pad = 6, sc = Math.min((cw - 2 * pad) / bb.w, 420 / bb.h);
+  const ch = bb.h * sc + 2 * pad;
+  cv.style.height = ch + 'px';
+  cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, cw, ch);
+  const X = x => pad + (x - bb.x0) * sc + (cw - 2 * pad - bb.w * sc) / 2, Y = y => pad + (bb.y1 - y) * sc;
+  const cols = { cut: '#2a2420', score: '#2f6fb0', dim: '#9a9086', seam: '#d08a1e' };
+  part.prims.forEach(p => {
+    if (p.k !== 'poly') return;
+    g.beginPath();
+    p.pts.forEach((q, i) => (i ? g.lineTo(X(q[0]), Y(q[1])) : g.moveTo(X(q[0]), Y(q[1]))));
+    if (p.closed) g.closePath();
+    if (p.s === 'cut' && p.closed) { g.fillStyle = '#f7ebe0'; g.fill(); }
+    g.strokeStyle = cols[p.s]; g.lineWidth = p.s === 'cut' ? 1.6 : p.s === 'dim' ? 0.8 : 1.3;
+    g.setLineDash(p.s === 'score' ? [5, 4] : p.s === 'seam' ? [7, 3, 2, 3] : []);
+    g.stroke();
+  });
+  g.setLineDash([]);
+  part.prims.forEach(p => {
+    if (p.k !== 'text' || p.title) return;
+    const px = Math.max(8, Math.min(12, p.size * sc * 1.1));
+    g.save(); g.translate(X(p.x), Y(p.y)); g.rotate(-p.rot / Geo.DEG);
+    g.font = `${px}px system-ui, sans-serif`; g.fillStyle = '#2a2420';
+    g.textAlign = p.a === 'middle' ? 'center' : p.a === 'end' ? 'right' : 'left'; g.textBaseline = 'middle';
+    g.fillText(p.t, 0, 0); g.restore();
+  });
+}
+
+/* ---------- 3D preview ---------- */
+const view = { yaw: -0.6, pitch: 0.45 };
+function faces3d() {
+  const r = current.r; if (!r) return [];
+  const F = [];
+  if (state.mode === 'silhouet') {
+    const D = r.depth / 2, n = r.pts.length;
+    F.push(r.pts.map(p => [p[0], -D, p[1]]), r.pts.map(p => [p[0], D, p[1]]));
+    for (let i = 0; i < n; i++) if (!r.open[i]) {
+      const a = r.pts[i], b = r.pts[(i + 1) % n];
+      F.push([[a[0], -D, a[1]], [b[0], -D, b[1]], [b[0], D, b[1]], [a[0], D, a[1]]]);
+    }
+  } else {
+    const L = r.levels, N = r.N;
+    for (let k = 0; k + 1 < L.length; k++) for (let i = 0; i < N; i++) {
+      const j = (i + 1) % N;
+      F.push([[...L[k].pts[i], L[k].z], [...L[k].pts[j], L[k].z], [...L[k + 1].pts[j], L[k + 1].z], [...L[k + 1].pts[i], L[k + 1].z]]);
+    }
+    F.push(L[0].pts.map(p => [p[0], p[1], L[0].z]));
+  }
+  return F;
+}
+function draw3d() {
+  const cv = $('view3d'), dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const F = faces3d(); if (!F.length) return;
+  const all = F.flat();
+  const mn = [0, 1, 2].map(i => Math.min(...all.map(p => p[i]))), mx = [0, 1, 2].map(i => Math.max(...all.map(p => p[i])));
+  const c = mn.map((v, i) => (v + mx[i]) / 2), R = Math.hypot(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]) / 2 || 1;
+  const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw), cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
+  const sc = Math.min(w, h) * 0.45 / R;
+  const proj = p => {
+    const x = p[0] - c[0], y = p[1] - c[1], z = p[2] - c[2];
+    const x1 = x * cy - y * sy, y1 = x * sy + y * cy;
+    return { X: w / 2 + x1 * sc, Y: h / 2 - (y1 * sp + z * cp) * sc, d: y1 * cp - z * sp };
+  };
+  const light = Geo.unit([0.4, 1]);
+  const items = F.map(f => {
+    const P2 = f.map(proj);
+    let nx = 0, ny = 0, nz = 0;
+    for (let i = 0; i < f.length; i++) {
+      const a = f[i], b = f[(i + 1) % f.length];
+      nx += (a[1] - b[1]) * (a[2] + b[2]); ny += (a[2] - b[2]) * (a[0] + b[0]); nz += (a[0] - b[0]) * (a[1] + b[1]);
+    }
+    const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+    const x1 = nx * cy - ny * sy, y1 = nx * sy + ny * cy;
+    const camZ = y1 * cp - nz * sp, camY = y1 * sp + nz * cp;
+    const br = 0.45 + 0.55 * Math.abs(-camZ * light[1] + camY * light[0] * 0.6);
+    return { P2, d: P2.reduce((s, p) => s + p.d, 0) / P2.length, br };
+  }).sort((a, b) => b.d - a.d);
+  items.forEach(it => {
+    g.beginPath(); it.P2.forEach((p, i) => (i ? g.lineTo(p.X, p.Y) : g.moveTo(p.X, p.Y))); g.closePath();
+    const v = Math.min(1, it.br);
+    g.fillStyle = `rgb(${Math.round(201 * v)},${Math.round(130 * v)},${Math.round(91 * v)})`;
+    g.fill(); g.strokeStyle = '#5a3420'; g.lineWidth = 1; g.stroke();
+  });
+}
+(function setup3d() {
+  const cv = $('view3d'); let last = null;
+  cv.addEventListener('pointerdown', e => { last = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => {
+    if (!last) return;
+    view.yaw += (e.clientX - last[0]) * 0.01;
+    view.pitch = Math.max(-1.4, Math.min(1.4, view.pitch + (e.clientY - last[1]) * 0.01));
+    last = [e.clientX, e.clientY]; draw3d();
+  });
+  ['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => { last = null; }));
+})();
+
+/* ================= Modus 1: editor ================= */
+const ed = { view: null, drag: -1, sel: -1, down: null, moved: false };
+const snap = v => Math.round(v * 2) / 2;
+function edFit() {
+  const cv = $('editor'), pts = state.sil.pts;
+  const xs = pts.map(p => p[0]).concat([0, 20]), ys = pts.map(p => p[1]).concat([0, 20]);
+  let x0 = Math.min(...xs) - 3, x1 = Math.max(...xs) + 3, y0 = Math.min(...ys) - 3, y1 = Math.max(...ys) + 3;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  const sc = Math.min(w / (x1 - x0), h / (y1 - y0));
+  ed.view = { sc, ox: (w - (x1 - x0) * sc) / 2 - x0 * sc, oy: h - (h - (y1 - y0) * sc) / 2 + y0 * sc };
+}
+const toS = p => [ed.view.ox + p[0] * ed.view.sc, ed.view.oy - p[1] * ed.view.sc];
+const toW = (x, y) => [(x - ed.view.ox) / ed.view.sc, (ed.view.oy - y) / ed.view.sc];
+function edDraw() {
+  const cv = $('editor'), dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  if (!ed.view) edFit();
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const [wx0, wy1] = toW(0, 0), [wx1, wy0] = toW(w, h);
+  for (let x = Math.ceil(wx0 * 2) / 2; x <= wx1; x += 0.5) {
+    const major = Math.abs(x % 5) < 1e-9, unitL = Math.abs(x % 1) < 1e-9;
+    if (!unitL && ed.view.sc < 14) continue;
+    g.strokeStyle = major ? '#d8c9b6' : unitL ? '#eee5d9' : '#f6f0e8'; g.lineWidth = 1;
+    const X = Math.round(toS([x, 0])[0]) + 0.5; g.beginPath(); g.moveTo(X, 0); g.lineTo(X, h); g.stroke();
+    if (major) { g.fillStyle = '#a89886'; g.font = '10px system-ui'; g.fillText(String(x), X + 2, h - 4); }
+  }
+  for (let y = Math.ceil(wy0 * 2) / 2; y <= wy1; y += 0.5) {
+    const major = Math.abs(y % 5) < 1e-9, unitL = Math.abs(y % 1) < 1e-9;
+    if (!unitL && ed.view.sc < 14) continue;
+    g.strokeStyle = major ? '#d8c9b6' : unitL ? '#eee5d9' : '#f6f0e8'; g.lineWidth = 1;
+    const Y = Math.round(toS([0, y])[1]) + 0.5; g.beginPath(); g.moveTo(0, Y); g.lineTo(w, Y); g.stroke();
+    if (major) { g.fillStyle = '#a89886'; g.font = '10px system-ui'; g.fillText(String(y), 3, Y - 3); }
+  }
+  g.strokeStyle = '#b5a48f'; g.lineWidth = 1.5;
+  const o = toS([0, 0]); g.beginPath(); g.moveTo(0, o[1]); g.lineTo(w, o[1]); g.stroke();
+  const pts = state.sil.pts, n = pts.length;
+  if (n >= 3) {
+    g.beginPath(); pts.forEach((p, i) => { const s = toS(p); i ? g.lineTo(...s) : g.moveTo(...s); }); g.closePath();
+    g.fillStyle = 'rgba(201,130,91,.14)'; g.fill();
+  }
+  for (let i = 0; i < n; i++) {
+    if (n < 2 || (n === 2 && i === 1)) break;
+    const a = toS(pts[i]), b = toS(pts[(i + 1) % n]), op = state.sil.open[i];
+    g.beginPath(); g.moveTo(...a); g.lineTo(...b);
+    g.strokeStyle = op ? '#a89886' : '#2a2420'; g.lineWidth = op ? 1.5 : 2.2; g.setLineDash(op ? [6, 5] : []); g.stroke(); g.setLineDash([]);
+    const L = Math.hypot(pts[(i + 1) % n][0] - pts[i][0], pts[(i + 1) % n][1] - pts[i][1]);
+    g.fillStyle = op ? '#a89886' : '#7a6e64'; g.font = '11px system-ui'; g.textAlign = 'center';
+    g.fillText(f2(L) + (op ? ' open' : ''), (a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 6);
+  }
+  pts.forEach((p, i) => {
+    const s = toS(p);
+    g.beginPath(); g.arc(s[0], s[1], i === ed.sel ? 7 : 5, 0, Math.PI * 2);
+    g.fillStyle = i === ed.sel ? '#b5653c' : '#fff'; g.fill(); g.strokeStyle = '#b5653c'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = '#2a2420'; g.font = '600 11px system-ui'; g.textAlign = 'left'; g.fillText('P' + (i + 1), s[0] + 8, s[1] - 8);
+  });
+}
+function edPointer() {
+  const cv = $('editor');
+  const pos = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  cv.addEventListener('pointerdown', e => {
+    const [x, y] = pos(e);
+    ed.down = [x, y]; ed.moved = false; ed.drag = -1;
+    state.sil.pts.forEach((p, i) => { const s = toS(p); if (Math.hypot(s[0] - x, s[1] - y) < 16 && ed.drag < 0) ed.drag = i; });
+    if (ed.drag >= 0) { ed.sel = ed.drag; edDraw(); renderPtTable(); }
+    cv.setPointerCapture(e.pointerId);
+  });
+  let raf = 0;
+  cv.addEventListener('pointermove', e => {
+    if (!ed.down) return;
+    const [x, y] = pos(e);
+    if (Math.hypot(x - ed.down[0], y - ed.down[1]) > 4) ed.moved = true;
+    if (ed.drag >= 0 && ed.moved) {
+      const w = toW(x, y).map(snap);
+      const p = state.sil.pts[ed.drag];
+      if (p[0] !== w[0] || p[1] !== w[1]) {
+        state.sil.pts[ed.drag] = w;
+        if (!raf) raf = requestAnimationFrame(() => { raf = 0; edDraw(); syncPtTableValues(); update(); });
+      }
+    }
+  });
+  const end = e => {
+    if (!ed.down) return;
+    const [x, y] = pos(e);
+    if (!ed.moved && ed.drag < 0) {
+      const w = toW(x, y).map(snap), pts = state.sil.pts, n = pts.length;
+      let best = -1, bd = 12;
+      for (let i = 0; i < n && n >= 3; i++) {
+        const a = toS(pts[i]), b = toS(pts[(i + 1) % n]);
+        const ab = [b[0] - a[0], b[1] - a[1]], L2 = ab[0] * ab[0] + ab[1] * ab[1] || 1;
+        const t = Math.max(0, Math.min(1, ((x - a[0]) * ab[0] + (y - a[1]) * ab[1]) / L2));
+        const d = Math.hypot(a[0] + ab[0] * t - x, a[1] + ab[1] * t - y);
+        if (d < bd && t > 0.05 && t < 0.95) { bd = d; best = i; }
+      }
+      if (best >= 0) { pts.splice(best + 1, 0, w); state.sil.open.splice(best + 1, 0, state.sil.open[best]); ed.sel = best + 1; }
+      else {
+        const lastOpen = state.sil.open[n - 1] || false;
+        if (n > 0) state.sil.open[n - 1] = false;
+        pts.push(w); state.sil.open.push(lastOpen); ed.sel = pts.length - 1;
+      }
+    }
+    ed.down = null; ed.drag = -1;
+    edFit(); edDraw(); renderPtTable(); update();
+  };
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', end);
+}
+function renderPtTable() {
+  const tb = $('pt-table'), s = state.sil;
+  let h = '<tr><th>#</th><th>x (cm)</th><th>y (cm)</th><th>rand open</th><th></th></tr>';
+  s.pts.forEach((p, i) => {
+    h += `<tr class="${i === ed.sel ? 'sel' : ''}" data-i="${i}"><td>P${i + 1}</td>
+      <td><input type="text" inputmode="decimal" data-f="x" value="${String(p[0]).replace('.', ',')}"></td>
+      <td><input type="text" inputmode="decimal" data-f="y" value="${String(p[1]).replace('.', ',')}"></td>
+      <td><label class="chk"><input type="checkbox" data-f="open"${s.open[i] ? ' checked' : ''}> P${i + 1}→P${(i + 1) % s.pts.length + 1}</label></td>
+      <td><button class="x" data-f="del" title="verwijderen">×</button></td></tr>`;
+  });
+  tb.innerHTML = h;
+}
+function syncPtTableValues() {
+  $('pt-table').querySelectorAll('tr[data-i]').forEach(tr => {
+    const i = +tr.dataset.i, p = state.sil.pts[i]; if (!p) return;
+    const ix = tr.querySelector('[data-f=x]'), iy = tr.querySelector('[data-f=y]');
+    if (document.activeElement !== ix) ix.value = String(p[0]).replace('.', ',');
+    if (document.activeElement !== iy) iy.value = String(p[1]).replace('.', ',');
+    tr.classList.toggle('sel', i === ed.sel);
+  });
+}
+function deletePoint(i) {
+  if (i < 0 || i >= state.sil.pts.length) return;
+  state.sil.pts.splice(i, 1);
+  const n = state.sil.open.length;
+  // merge the two edges around the removed point: keep "open" if either was open
+  const prev = (i - 1 + n) % n, merged = state.sil.open[prev] || state.sil.open[i];
+  state.sil.open.splice(i, 1);
+  if (state.sil.open.length) state.sil.open[(i - 1 + state.sil.open.length) % state.sil.open.length] = merged;
+  ed.sel = -1; edFit(); edDraw(); renderPtTable(); update();
+}
+
+/* ================= Modus 2: levels ================= */
+function renderLevels() {
+  const box = $('levels');
+  box.innerHTML = '';
+  state.sec.levels.forEach((l, i) => {
+    const d = document.createElement('div'); d.className = 'lvl'; d.dataset.id = l.id;
+    const v = x => String(x).replace('.', ',');
+    d.innerHTML = `<span class="handle" title="verslepen">⠿</span><span class="idx">${i + 1}</span>
+      <label class="f">z (cm)<input type="text" inputmode="decimal" class="sm" data-f="z" value="${v(l.z)}"></label>
+      <label class="f">vorm<select data-f="type"><option value="rect"${l.type === 'rect' ? ' selected' : ''}>rechthoek</option><option value="ngon"${l.type === 'ngon' ? ' selected' : ''}>n-hoek</option></select></label>
+      ${l.type === 'rect'
+        ? `<label class="f">breedte<input type="text" inputmode="decimal" class="sm" data-f="w" value="${v(l.w)}"></label>
+           <label class="f">diepte<input type="text" inputmode="decimal" class="sm" data-f="d" value="${v(l.d)}"></label>`
+        : `<label class="f">n<input type="text" inputmode="numeric" class="sm" data-f="n" value="${v(l.n)}"></label>
+           <label class="f">diameter<input type="text" inputmode="decimal" class="sm" data-f="diam" value="${v(l.diam)}"></label>`}
+      <label class="f">verschuiving x<input type="text" inputmode="decimal" class="sm" data-f="dx" value="${v(l.dx)}"></label>
+      <label class="f">y<input type="text" inputmode="decimal" class="sm" data-f="dy" value="${v(l.dy)}"></label>
+      <button class="x" data-f="del" title="verwijderen">×</button>`;
+    box.appendChild(d);
+  });
+}
+function levelEvents() {
+  const box = $('levels');
+  const find = el => { const d = el.closest('.lvl'); return d && state.sec.levels.find(l => String(l.id) === d.dataset.id); };
+  box.addEventListener('input', e => {
+    const l = find(e.target), f = e.target.dataset.f; if (!l || !f || f === 'type') return;
+    l[f] = e.target.value; update();
+  });
+  box.addEventListener('change', e => {
+    const l = find(e.target); if (!l || e.target.dataset.f !== 'type') return;
+    l.type = e.target.value; renderLevels(); update();
+  });
+  box.addEventListener('click', e => {
+    if (e.target.dataset.f !== 'del') return;
+    const l = find(e.target); state.sec.levels = state.sec.levels.filter(x => x !== l); renderLevels(); update();
+  });
+  // drag to reorder (pointer events: works with touch)
+  let drag = null;
+  box.addEventListener('pointerdown', e => {
+    if (!e.target.classList.contains('handle')) return;
+    e.preventDefault();
+    const row = e.target.closest('.lvl');
+    drag = { row, id: row.dataset.id }; row.classList.add('dragging');
+    e.target.setPointerCapture(e.pointerId);
+  });
+  box.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const rows = [...box.children].filter(r => r !== drag.row);
+    const after = rows.find(r => { const b = r.getBoundingClientRect(); return e.clientY < b.top + b.height / 2; });
+    if (after) box.insertBefore(drag.row, after); else box.appendChild(drag.row);
+  });
+  const end = () => {
+    if (!drag) return;
+    drag.row.classList.remove('dragging');
+    const zs = state.sec.levels.map(l => l.z);
+    const order = [...box.children].map(r => state.sec.levels.find(l => String(l.id) === r.dataset.id));
+    order.forEach((l, i) => { l.z = zs[i]; });
+    state.sec.levels = order; drag = null; renderLevels(); update();
+  };
+  box.addEventListener('pointerup', end); box.addEventListener('pointercancel', end);
+}
+
+/* ================= Downloads ================= */
+function download(name, data, type) {
+  const blob = data instanceof Blob ? data : new Blob([data], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+const baseName = () => 'slabvaas-' + (state.mode === 'silhouet' ? 'silhouet' : 'facet');
+function exportLayout(withControl = true) {
+  if (!current.r) { alert('Er is nog geen geldig ontwerp.'); return null; }
+  return layout((withControl ? [controlPart()] : []).concat(current.parts));
+}
+
+/* ================= Wiring ================= */
+function syncInputs() {
+  const s = state.settings;
+  $('s-krimp').value = String(s.krimp).replace('.', ',');
+  $('s-t').value = String(s.t).replace('.', ',');
+  $('s-ref').value = s.ref; $('s-marge').checked = !!s.marge;
+  $('s-margecm').value = String(s.margeCm).replace('.', ',');
+  $('sil-depth').value = String(state.sil.depth).replace('.', ',');
+  $('sil-pieces').checked = !!state.sil.pieces;
+  $('sec-diamref').value = state.sec.diamRef;
+  setMode(state.mode, true);
+  renderPtTable(); renderLevels(); ed.view = null; ed.sel = -1;
+}
+function setMode(m, silent) {
+  state.mode = m;
+  $('tab-sil').classList.toggle('on', m === 'silhouet');
+  $('tab-sec').classList.toggle('on', m === 'doorsnede');
+  document.querySelectorAll('.mode-sil').forEach(el => el.classList.toggle('hide', m !== 'silhouet'));
+  document.querySelectorAll('.mode-sec').forEach(el => el.classList.toggle('hide', m !== 'doorsnede'));
+  if (!silent) { requestAnimationFrame(() => { ed.view = null; edDraw(); }); update(); }
+}
+
+function init() {
+  document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  const bind = (id, fn, ev = 'input') => $(id).addEventListener(ev, e => { fn(e.target); update(); });
+  bind('s-krimp', el => { state.settings.krimp = el.value; });
+  bind('s-t', el => { state.settings.t = el.value; });
+  bind('s-ref', el => { state.settings.ref = el.value; }, 'change');
+  bind('s-marge', el => { state.settings.marge = el.checked; }, 'change');
+  bind('s-margecm', el => { state.settings.margeCm = el.value; });
+  bind('sil-depth', el => { state.sil.depth = el.value; });
+  bind('sil-pieces', el => { state.sil.pieces = el.checked; }, 'change');
+  bind('sec-diamref', el => { state.sec.diamRef = el.value; }, 'change');
+
+  const tb = $('pt-table');
+  tb.addEventListener('input', e => {
+    const tr = e.target.closest('tr[data-i]'); if (!tr) return;
+    const i = +tr.dataset.i, f = e.target.dataset.f;
+    if (f === 'x' || f === 'y') {
+      const v = parseFloat(e.target.value.replace(',', '.'));
+      if (!isFinite(v)) return;
+      state.sil.pts[i][f === 'x' ? 0 : 1] = v; edDraw(); update();
+    }
+  });
+  tb.addEventListener('change', e => {
+    const tr = e.target.closest('tr[data-i]'); if (!tr) return;
+    if (e.target.dataset.f === 'open') { state.sil.open[+tr.dataset.i] = e.target.checked; edDraw(); update(); }
+    if (e.target.dataset.f === 'x' || e.target.dataset.f === 'y') { ed.view = null; edDraw(); }
+  });
+  tb.addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-i]'); if (!tr) return;
+    if (e.target.dataset.f === 'del') deletePoint(+tr.dataset.i);
+    else if (e.target.tagName !== 'INPUT') { ed.sel = +tr.dataset.i; edDraw(); syncPtTableValues(); }
+  });
+  $('pt-add').addEventListener('click', () => {
+    const pts = state.sil.pts, last = pts[pts.length - 1] || [0, 0];
+    const n = pts.length, lastOpen = state.sil.open[n - 1] || false;
+    if (n) state.sil.open[n - 1] = false;
+    pts.push([last[0] + 2, last[1]]); state.sil.open.push(lastOpen);
+    ed.sel = pts.length - 1; ed.view = null; edDraw(); renderPtTable(); update();
+  });
+  $('pt-del').addEventListener('click', () => deletePoint(ed.sel));
+  $('pt-clear').addEventListener('click', () => {
+    if (!confirm('Alle punten wissen?')) return;
+    state.sil.pts = []; state.sil.open = []; ed.sel = -1; ed.view = null; edDraw(); renderPtTable(); update();
+  });
+  $('preset').addEventListener('change', e => {
+    const p = PRESETS[e.target.value]; e.target.value = ''; if (!p) return;
+    state.sil.pts = p.pts.map(q => q.slice()); state.sil.open = p.open.slice();
+    ed.sel = -1; ed.view = null; edDraw(); renderPtTable(); update();
+  });
+  $('lv-add').addEventListener('click', () => {
+    const L = state.sec.levels, last = L[L.length - 1];
+    L.push(last ? lvl(num(last.z) + 10, { type: last.type, w: last.w, d: last.d, n: last.n, diam: last.diam }) : lvl(0));
+    renderLevels(); update();
+  });
+  levelEvents();
+  edPointer();
+
+  $('copy').addEventListener('click', async () => {
+    const txt = $('report').textContent, btn = $('copy');
+    try { await navigator.clipboard.writeText(txt); }
+    catch (e) {
+      const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (e2) { /* niets */ } ta.remove();
+    }
+    btn.textContent = 'Gekopieerd ✓'; setTimeout(() => { btn.textContent = 'Kopieer maten'; }, 1500);
+  });
+  $('ex-svg').addEventListener('click', () => { const l = exportLayout(); if (l) download(baseName() + '.svg', toSVG(l, 'Slab-vaas mallen'), 'image/svg+xml'); });
+  $('ex-pdf').addEventListener('click', () => { const l = exportLayout(); if (l) download(baseName() + '.pdf', new Blob([toPDF(l).bytes], { type: 'application/pdf' })); });
+  $('ex-hpgl').addEventListener('click', () => { const l = exportLayout(false); if (l) download(baseName() + '.hpgl', toHPGL(l), 'application/vnd.hp-hpgl'); });
+  $('save-json').addEventListener('click', () => download(baseName() + '.json', JSON.stringify({ app: 'slab-vaas', version: 1, state }, null, 2), 'application/json'));
+  $('load-json').addEventListener('click', () => $('file-json').click());
+  $('file-json').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try { const obj = JSON.parse(await f.text()); loadState(obj.state || obj); syncInputs(); edDraw(); update(); }
+    catch (err) { alert('Kon dit bestand niet lezen: ' + err.message); }
+    e.target.value = '';
+  });
+  $('reset').addEventListener('click', () => { if (confirm('Alles terugzetten naar de standaardwaarden?')) { state = defaults(); syncInputs(); edDraw(); update(); } });
+
+  let rt = 0;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { ed.view = null; edDraw(); update(); }, 150); });
+  syncInputs(); edDraw(); update();
+}
+init();
+</script>
+</body>
+</html>
