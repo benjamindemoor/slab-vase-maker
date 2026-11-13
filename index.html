@@ -61,6 +61,12 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 .legend i.m{border-top:2px dashed var(--seam)}
 .legend i.v{border-top:2px dotted #7b3fa0}
 .hide{display:none!important}
+.hist{display:flex;gap:4px;margin-left:auto}
+.hist button{border:0;background:#ffffff1f;color:#fff;padding:6px 10px;border-radius:7px;font:inherit;font-size:14px;cursor:pointer}
+.hist button:hover:not(:disabled){background:#ffffff3a}
+.hist button:disabled{opacity:.35;cursor:default}
+.stencil{border:1px dashed var(--line);border-radius:9px;padding:8px 10px;margin-bottom:10px}
+.stencil input[type=range]{width:110px}
 #lib-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin-top:10px}
 .vase{display:flex;gap:10px;border:1px solid var(--line);border-radius:9px;padding:6px;background:#fff;align-items:center;min-width:0}
 .vase.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
@@ -74,6 +80,12 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 .lib-row input{flex:1 1 180px}
 .part{cursor:zoom-in}
 .part h4{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.lg{font-size:13px;margin-top:6px;line-height:1.5}
+.lg .sides{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:2px 10px}
+.lg .sides span b{color:var(--accent);display:inline-block;min-width:1.4em;font-size:15px}
+.lg .notes{color:var(--muted);font-size:12px;margin-top:4px}
+#v-legend{max-height:30vh;overflow:auto;padding:6px 12px;border-top:1px solid var(--line);background:var(--card)}
+#v-legend:empty{display:none}
 .part .zoom{border:0;background:none;color:var(--accent);font:inherit;font-size:12px;cursor:pointer;padding:0;white-space:nowrap}
 #viewer{position:fixed;inset:0;z-index:50;background:#fff;display:flex;flex-direction:column}
 .vbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--card)}
@@ -88,6 +100,10 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   <div class="tabs" role="tablist">
     <button id="tab-sil" data-mode="silhouet">Silhouetvaas</button>
     <button id="tab-sec" data-mode="doorsnede">Facetvaas</button>
+  </div>
+  <div class="hist">
+    <button id="undo" title="Ongedaan maken (⌘Z / Ctrl+Z)" disabled>↶ Ongedaan maken</button>
+    <button id="redo" title="Opnieuw (⇧⌘Z / Ctrl+Y)" disabled>↷ Opnieuw</button>
   </div>
 </header>
 
@@ -112,6 +128,8 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
         <select id="s-ref"><option value="buiten">buitenmaat</option><option value="binnen">binnenmaat</option></select></label>
       <label class="chk"><input type="checkbox" id="s-marge"> Naadmarge</label>
       <label class="f">marge (cm)<input type="text" inputmode="decimal" class="num" id="s-margecm"></label>
+      <label class="f">Maten op de tekening
+        <select id="s-labels"><option value="letters">letters (a, b, c…) + legende</option><option value="volledig">alle maten op de lijnen</option></select></label>
     </div>
     <p class="hint">Je voert de gebakken maten in. Alle uitvoer wordt vergroot met 1/(1 − krimp). Slabdikte = de dikte die je uitrolt.</p>
   </div>
@@ -120,6 +138,29 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   <div class="card mode-sil">
     <h2>Silhouet van het voorpaneel</h2>
     <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="sil-sym"> Symmetrisch: teken de rechterhelft, de linkerhelft wordt gespiegeld</label>
+    <div class="stencil">
+      <div class="row">
+        <button class="b" id="st-add">Afbeelding als stencil…</button>
+        <input type="file" id="st-file" accept="image/png,image/jpeg,image/webp" class="hide">
+        <span class="hint" style="margin:0">Laad een schets of foto (PNG/JPG) onder het raster en teken je punten erover.</span>
+      </div>
+      <div id="st-ctl" class="hide">
+        <div class="row" style="margin-top:8px">
+          <label class="f">breedte (cm)<input type="text" inputmode="decimal" class="sm" id="st-w"></label>
+          <label class="f">hoogte (cm)<input type="text" inputmode="decimal" class="sm" id="st-h"></label>
+          <label class="f">x links (cm)<input type="text" inputmode="decimal" class="sm" id="st-x"></label>
+          <label class="f">y onder (cm)<input type="text" inputmode="decimal" class="sm" id="st-y"></label>
+          <label class="f">zichtbaarheid<input type="range" min="0.1" max="1" step="0.05" id="st-op"></label>
+        </div>
+        <div class="btns">
+          <label class="chk"><input type="checkbox" id="st-show"> tonen</label>
+          <label class="chk"><input type="checkbox" id="st-move"> stencil verschuiven met slepen</label>
+          <button class="b" id="st-fit">Hoogte = vaas</button>
+          <button class="b" id="st-del">Stencil verwijderen</button>
+        </div>
+        <p class="hint" id="st-msg">Zet breedte of hoogte op de echte maat, dan klopt het stencil met het cm-raster. Het stencil wordt niet mee geprint.</p>
+      </div>
+    </div>
     <canvas id="editor"></canvas>
     <p class="hint">Tik op een lege plek: punt achteraan toevoegen. Tik vlak bij een rand: punt in die rand invoegen. Sleep een punt om het te verplaatsen. Alles snapt op 0,5 cm. y = 0 is de onderkant.</p>
     <div class="btns">
@@ -202,6 +243,7 @@ pre#report{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
     <button class="b p" id="v-close">Sluiten</button>
   </div>
   <canvas id="v-canvas"></canvas>
+  <div id="v-legend" class="lg"></div>
   <p class="hint" style="margin:0;padding:6px 12px">Knijp of scroll om te zoomen, sleep om te verschuiven. De labels groeien mee met de tekening.</p>
 </div>
 
@@ -490,8 +532,8 @@ const lvl = (z, o) => Object.assign({ id: uid++, z, type: 'rect', w: 10, d: 8, n
 function defaults() {
   return {
     mode: 'silhouet',
-    settings: { krimp: 12, t: 0.8, ref: 'buiten', marge: false, margeCm: 1, paper: 'A4' },
-    sil: { pts: PRESETS.trap.pts.map(p => p.slice()), open: PRESETS.trap.open.slice(), depth: 8, pieces: false, joint: 'verstek',
+    settings: { krimp: 12, t: 0.8, ref: 'buiten', marge: false, margeCm: 1, paper: 'A4', labels: 'letters' },
+    sil: { pts: PRESETS.trap.pts.map(p => p.slice()), open: PRESETS.trap.open.slice(), depth: 8, pieces: false, joint: 'verstek', stencil: null,
       sym: { on: false, axis: 0, half: [], hopen: [], top: true, bottom: false } },
     sec: { diamRef: 'hoek', sym: false, levels: [lvl(0, { w: 8, d: 6 }), lvl(15, { w: 14, d: 10 }), lvl(25, { w: 7, d: 5 })] },
   };
@@ -514,6 +556,36 @@ let saveTimer = null;
 function persist() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* negeren */ } }, 300);
+  histRecord();
+}
+
+/* ================= Ongedaan maken / opnieuw =================
+   Momentopnames van het ontwerp (zonder de stencilafbeelding zelf). Wijzigingen die kort na elkaar
+   komen (typen, slepen) worden samengevoegd tot één stap. */
+const hist = { stack: [], i: -1, timer: 0, lock: false };
+function histCommit() {
+  clearTimeout(hist.timer); hist.timer = 0;
+  const snap = JSON.stringify(state);
+  if (hist.stack[hist.i] === snap) return;
+  hist.stack.length = hist.i + 1; hist.stack.push(snap);
+  if (hist.stack.length > 200) hist.stack.shift();
+  hist.i = hist.stack.length - 1; histButtons();
+}
+function histRecord() {
+  if (hist.lock || ed.down) return; // tijdens slepen pas bij loslaten
+  clearTimeout(hist.timer); hist.timer = setTimeout(histCommit, 400);
+}
+function histGo(d) {
+  if (hist.timer) histCommit();
+  const j = hist.i + d; if (j < 0 || j >= hist.stack.length) return;
+  hist.i = j; hist.lock = true;
+  try { loadState(JSON.parse(hist.stack[j])); syncInputs(); edDraw(); update(); }
+  finally { hist.lock = false; }
+  histButtons();
+}
+function histButtons() {
+  $('undo').disabled = hist.i <= 0;
+  $('redo').disabled = hist.i >= hist.stack.length - 1;
 }
 
 /* ================= Drawing primitives =================
@@ -523,16 +595,43 @@ const P = (pts, s = 'cut', closed = false) => ({ k: 'poly', pts, s, closed });
 const T = (x, y, t, o = {}) => Object.assign({ k: 'text', x, y, t, size: 0.32, a: 'middle', rot: 0 }, o);
 const readable = e => { let a = Math.atan2(e[1], e[0]) * Geo.DEG; if (a > 90.01) a -= 180; if (a <= -89.99) a += 180; return a; };
 
-function dimPrims(p, q, nrm, off, label) {
+/* ---------- Letters per zijde (eenvoudige weergave) ----------
+   Elke slab krijgt een nummer, elke maat op die slab een letter (a, b, c …).
+   De waarden komen in een legende onder de slab in plaats van op de lijnen. */
+let LAB = null, PARTNO = 0;
+const letter = k => String.fromCharCode(97 + (k % 26)) + (k >= 26 ? String(Math.floor(k / 26) + 1) : '');
+const simpleLabels = () => state.settings.labels !== 'volledig';
+function beginPart() { LAB = simpleLabels() ? { n: 0, sides: [], notes: [] } : null; }
+/** Maat: in de eenvoudige weergave een letter (de waarde gaat naar de legende), anders de tekst zelf. */
+function meas(text) { if (!LAB) return text; const l = letter(LAB.n++); LAB.sides.push([l, text]); return l; }
+/** Hoek/verstek/opmerking: in de eenvoudige weergave naar de legende i.p.v. op de tekening. */
+function info(prim) { if (!LAB) return [prim]; LAB.notes.push(prim.t); return []; }
+function infoList(prefix, items) {
+  for (let i = 0; i < items.length; i += 4) LAB.notes.push((i ? ' '.repeat(prefix.length + 1) : prefix + ' ') + items.slice(i, i + 4).join(' · '));
+}
+const LETTER = 0.6;
+
+function dimPrims(p, q, nrm, off, label, bare) {
   const { add, mul, sub, unit } = Geo;
+  const txt = meas(label);
+  if (LAB && bare) { // alleen de letter naast de zijde
+    const mid = mul(add(p, q), 0.5);
+    return [T(...add(mid, mul(nrm, 0.55)), txt, { size: LETTER, letter: true })];
+  }
   const a = add(p, mul(nrm, off)), b = add(q, mul(nrm, off));
   const e = unit(sub(q, p)), tk = mul(unit(add(e, nrm)), 0.18);
   const mid = mul(add(a, b), 0.5);
+  if (LAB) return [
+    P([add(p, mul(nrm, 0.12)), add(p, mul(nrm, off + 0.2))], 'dim'),
+    P([add(q, mul(nrm, 0.12)), add(q, mul(nrm, off + 0.2))], 'dim'),
+    P([a, b], 'dim'), P([sub(a, tk), add(a, tk)], 'dim'), P([sub(b, tk), add(b, tk)], 'dim'),
+    T(...add(mid, mul(nrm, 0.5)), txt, { size: LETTER, letter: true }),
+  ];
   return [
     P([add(p, mul(nrm, 0.12)), add(p, mul(nrm, off + 0.2))], 'dim'),
     P([add(q, mul(nrm, 0.12)), add(q, mul(nrm, off + 0.2))], 'dim'),
     P([a, b], 'dim'), P([sub(a, tk), add(a, tk)], 'dim'), P([sub(b, tk), add(b, tk)], 'dim'),
-    T(...add(mid, mul(nrm, 0.36)), label, { rot: readable(e), size: 0.36 }),
+    T(...add(mid, mul(nrm, 0.36)), txt, { rot: readable(e), size: 0.36 }),
   ];
 }
 
@@ -552,9 +651,24 @@ function bbox(prims) {
 }
 
 function makePart(title, prims) {
+  let legend = null;
+  if (LAB) {
+    const no = ++PARTNO; title = `${no} · ${title}`;
+    const cut = prims.find(p => p.k === 'poly' && p.s === 'cut');
+    if (cut) {
+      const b = bbox([cut]);
+      prims.push(T((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, String(no), { size: Math.max(1, Math.min(3, Math.min(b.w, b.h) / 3)), letter: true, slabNo: true }));
+    }
+    const bb0 = bbox(prims), lines = [];
+    for (let i = 0; i < LAB.sides.length; i += 4) lines.push(LAB.sides.slice(i, i + 4).map(([l, t]) => `${l} = ${t}`).join('     '));
+    lines.push(...LAB.notes);
+    lines.forEach((ln, i) => prims.push(T(bb0.x0, bb0.y0 - 0.8 - i * 0.6, ln, { size: 0.36, a: 'start', legend: true })));
+    legend = { no, sides: LAB.sides, notes: LAB.notes };
+    LAB = null;
+  }
   const bb = bbox(prims);
   prims.push(T(bb.x0, bb.y1 + 0.7, title, { size: 0.5, a: 'start', title: true }));
-  return { title, prims, bb: bbox(prims) };
+  return { title, prims, bb: bbox(prims), legend };
 }
 
 /* ---------- Parts: modus 1 ---------- */
@@ -573,8 +687,9 @@ function polygonPrims(pts, lengths, angles, open, cut, names, inner) {
   const extra = cut ? (num(state.settings.margeCm) || 0) : 0;
   for (let i = 0; i < n; i++) {
     const q = pts[(i + 1) % n];
-    pr.push(...dimPrims(pts[i], q, edgeNormal(pts, i), 0.7 + (joined[i] ? extra : 0), f2(lengths[i]) + (joined[i] ? '' : ' open')));
+    pr.push(...dimPrims(pts[i], q, edgeNormal(pts, i), 0.7 + (joined[i] ? extra : 0), f2(lengths[i]) + (joined[i] ? '' : ' open'), true));
   }
+  if (LAB) { infoList('hoeken:', angles.map((a, i) => `${letter((i - 1 + n) % n)}/${letter(i)} ${f1(a)}°`)); return pr; }
   for (let i = 0; i < n; i++) {
     const b = inwardBisector(pts, i);
     pr.push(T(...add(pts[i], mul(b, 1.15)), f1(angles[i]) + '°', { size: 0.28 }));
@@ -583,6 +698,7 @@ function polygonPrims(pts, lengths, angles, open, cut, names, inner) {
   return pr;
 }
 function noteBelow(pr, text) {
+  if (LAB) { LAB.notes.push(text); return; }
   const bb = bbox(pr);
   pr.push(T(bb.x0, bb.y0 - 0.5, text, { size: 0.28, a: 'start' }));
 }
@@ -597,22 +713,25 @@ function stripPrims(L, W, sc, ec, longBevel, t, m) {
   const lab = c => `verstek ${f1(Math.abs(c.beta))}°`;
   if (sc && Math.abs(sc.inset) > 1e-6) { const x = Math.max(0, sc.inset); pr.push(P([[x, 0], [x, W]], 'bevel')); }
   if (ec && Math.abs(ec.inset) > 1e-6) { const x = L - Math.max(0, ec.inset); pr.push(P([[x, 0], [x, W]], 'bevel')); }
-  if (sc) pr.push(T(Math.max(0, sc.inset) + 0.3, W / 2, lab(sc), { size: 0.24, rot: 90 }));
-  if (ec) pr.push(T(L - Math.max(0, ec.inset) - 0.3, W / 2, lab(ec), { size: 0.24, rot: 90 }));
+  if (sc) pr.push(...info(T(Math.max(0, sc.inset) + 0.3, W / 2, (LAB ? 'begin: ' : '') + lab(sc), { size: 0.24, rot: 90 })));
+  if (ec) pr.push(...info(T(L - Math.max(0, ec.inset) - 0.3, W / 2, (LAB ? 'einde: ' : '') + lab(ec), { size: 0.24, rot: 90 })));
   return pr;
 }
 
 function silParts(r) {
   const parts = [], verstek = r.joint === 'verstek', t = r.t;
+  PARTNO = 0;
   const names = r.pts.map((_, i) => 'P' + (i + 1));
   const panelNote = verstek
     ? `gesloten randen: verstek 45°, afschuinlijn op ${f2(t)} cm van de rand (binnenkant)`
     : 'stompe naad: de zijstrook komt tussen voor- en achterpaneel';
+  beginPart();
   const front = polygonPrims(r.pts, r.lengths, r.angles, r.open, r.cut, names, r.inner);
   noteBelow(front, panelNote);
   parts.push(makePart('Voorpaneel', front));
   const mir = p => p.map(q => [-q[0], q[1]]);
   const mpts = mir(r.pts);
+  beginPart();
   const back = polygonPrims(mpts, r.lengths, Geo.interiorAngles(mpts), r.open, r.cut ? mir(r.cut) : null, names, r.inner ? mir(r.inner) : null);
   noteBelow(back, panelNote);
   parts.push(makePart('Achterpaneel (gespiegeld)', back));
@@ -622,8 +741,12 @@ function silParts(r) {
     const tag = r.runs.length > 1 ? ' ' + (ri + 1) : '';
     if (!state.sil.pieces) {
       const L = run.length;
+      beginPart();
       const pr = stripPrims(L, W, run.closeCut, run.loop ? Object.assign({}, run.closeCut) : null, verstek, t, run.loop ? m : 0);
-      run.pieces.forEach(pc => pr.push(T(pc.start + pc.len / 2, W + 0.4, `${names[pc.from]}→${names[pc.to]}  ${f2(pc.len)}`)));
+      run.pieces.forEach(pc => pr.push(LAB
+        ? T(pc.start + pc.len / 2, W + 0.6, meas(`${f2(pc.len)} (tegen ${letter(pc.edge)} van 1 en 2)`), { size: LETTER, letter: true })
+        : T(pc.start + pc.len / 2, W + 0.4, `${names[pc.from]}→${names[pc.to]}  ${f2(pc.len)}`)));
+      if (LAB) infoList('vouwen:', run.folds.map((fd, k) => `${letter(k)}/${letter(k + 1)} ${f1(fd.angle)}°, V-groef ${f1(fd.groove.knik)}° ${fd.groove.side}`));
       let lastAt = -1e9, lvl = 0;
       run.folds.forEach(fd => {
         lvl = fd.at - lastAt < 4 ? (lvl + 1) % 2 : 0; lastAt = fd.at;
@@ -631,19 +754,22 @@ function silParts(r) {
         pr.push(P([[fd.at, 0], [fd.at, W]], 'score'));
         const g = fd.groove;
         if (g.width > 0.02) pr.push(P([[fd.at - g.width / 2, 0], [fd.at - g.width / 2, W]], 'bevel'), P([[fd.at + g.width / 2, 0], [fd.at + g.width / 2, W]], 'bevel'));
-        pr.push(T(fd.at, -0.45 - dy, `${f1(fd.angle)}°`, { size: 0.28 }));
-        pr.push(T(fd.at, -0.85 - dy, `V ${f1(g.knik)}° ${g.side}`, { size: 0.22 }));
+        if (!LAB) {
+          pr.push(T(fd.at, -0.45 - dy, `${f1(fd.angle)}°`, { size: 0.28 }));
+          pr.push(T(fd.at, -0.85 - dy, `V ${f1(g.knik)}° ${g.side}`, { size: 0.22 }));
+        }
       });
       pr.push(...dimPrims([0, 0], [L, 0], [0, -1], 2.4, 'lengte ' + f2(L)));
       pr.push(...dimPrims([0, W], [0, 0], [-1, 0], 0.6 - Math.min(0, run.closeCut ? run.closeCut.inset : 0), 'breedte ' + f2(W)));
-      if (run.loop) pr.push(T(L / 2, W / 2, `gesloten ring: sluitnaad bij ${names[run.startVertex]} (${f1(run.closeAngle)}°)`, { size: 0.26 }));
+      if (run.loop) pr.push(...info(T(L / 2, W / 2, `gesloten ring: sluitnaad bij ${names[run.startVertex]} (${f1(run.closeAngle)}°)`, { size: 0.26 })));
       if (verstek) noteBelow(pr, `lange randen: verstek 45°, afschuinlijn op ${f2(t)} cm · binnenkant ${f2(W - 2 * t)} breed`);
       parts.push(makePart('Zijstrook' + tag + ' (uitgerold)', pr));
     } else {
       run.pieces.forEach((pc, k) => {
         const L = pc.len;
+        beginPart();
         const pr = stripPrims(L, W, pc.startCut, pc.endCut, verstek, t, m);
-        pr.push(T(L / 2, W + 0.4, `${names[pc.from]}→${names[pc.to]}`));
+        pr.push(...info(T(L / 2, W + 0.4, LAB ? `tegen zijde ${letter(pc.edge)} van 1 en 2` : `${names[pc.from]}→${names[pc.to]}`)));
         pr.push(...dimPrims([0, 0], [L, 0], [0, -1], 0.7, f2(L)));
         pr.push(...dimPrims([0, W], [0, 0], [-1, 0], 0.6 - Math.min(0, pc.startCut ? pc.startCut.inset : 0), f2(W)));
         if (verstek) noteBelow(pr, `lange randen: verstek 45° (afschuinlijn op ${f2(t)} cm)`);
@@ -657,8 +783,10 @@ function silParts(r) {
 /* ---------- Parts: modus 2 ---------- */
 function secParts(r) {
   const parts = [];
+  PARTNO = 0;
   const m = state.settings.marge ? num(state.settings.margeCm) : 0;
   r.columns.forEach(c => {
+    beginPart();
     const nseg = c.segs.length;
     const outline = [...c.left, ...c.right.slice().reverse()];
     const pr = [P(outline, 'cut', true)];
@@ -679,26 +807,30 @@ function secParts(r) {
     c.creases.forEach(cr => {
       const k = cr.level;
       pr.push(P([c.left[k], c.right[k]], 'score'));
-      pr.push(T((c.left[k][0] + c.right[k][0]) / 2, cr.y - 0.45, `knik ${f1(cr.knik)}° ${cr.kind} · V-groef ${cr.groove.side}`, { size: 0.25 }));
+      pr.push(...info(T((c.left[k][0] + c.right[k][0]) / 2, cr.y - 0.45, `knik ${LAB ? 'kraslijn ' + k + ': ' : ''}${f1(cr.knik)}° ${cr.kind} · V-groef ${cr.groove.side}`, { size: 0.25 })));
     });
     c.widths.forEach((w, k) => {
       const y = c.left[k][1], x = (c.left[k][0] + c.right[k][0]) / 2;
-      pr.push(T(x, k === nseg ? y - 0.45 : y + 0.45, f2(w)));
+      pr.push(LAB ? T(x, k === nseg ? y - 0.6 : y + 0.6, meas('breedte ' + f2(w)), { size: LETTER, letter: true }) : T(x, k === nseg ? y - 0.45 : y + 0.45, f2(w)));
     });
     const minX = Math.min(...c.left.map(p => p[0]));
     c.segs.forEach((sg, k) => {
-      pr.push(...dimPrims([minX, c.left[k + 1][1]], [minX, c.left[k][1]], [-1, 0], 0.8 + (m || 0), 'h ' + f2(sg.h)));
+      pr.push(...dimPrims([minX, c.left[k + 1][1]], [minX, c.left[k][1]], [-1, 0], 0.8 + (m || 0), (LAB ? 'hoogte ' : 'h ') + f2(sg.h)));
       const lm = Geo.mul(Geo.add(c.left[k], c.left[k + 1]), 0.5), rm = Geo.mul(Geo.add(c.right[k], c.right[k + 1]), 0.5);
       const le = Geo.sub(c.left[k + 1], c.left[k]), re = Geo.sub(c.right[k + 1], c.right[k]);
-      pr.push(T(lm[0] + 0.35, lm[1], `afs. ${f1(c.leftSeam[k].bevel)}°`, { size: 0.24, rot: readable(le) }));
-      pr.push(T(rm[0] - 0.35, rm[1], `afs. ${f1(c.rightSeam[k].bevel)}°`, { size: 0.24, rot: readable(re) }));
+      if (LAB) LAB.notes.push(`naad segment ${k + 1}: afschuinen links ${f1(c.leftSeam[k].bevel)}° · rechts ${f1(c.rightSeam[k].bevel)}°`);
+      else {
+        pr.push(T(lm[0] + 0.35, lm[1], `afs. ${f1(c.leftSeam[k].bevel)}°`, { size: 0.24, rot: readable(le) }));
+        pr.push(T(rm[0] - 0.35, rm[1], `afs. ${f1(c.rightSeam[k].bevel)}°`, { size: 0.24, rot: readable(re) }));
+      }
     });
-    pr.push(T(c.right[0][0] / 2, -0.5, `hoek bodem–wand ${f1(c.baseAngle)}° · verstek ${f1(c.baseBevel)}°`, { size: 0.26 }));
+    pr.push(...info(T(c.right[0][0] / 2, -0.5, `hoek bodem–wand ${f1(c.baseAngle)}° · verstek ${f1(c.baseBevel)}°`, { size: 0.26 })));
     parts.push(makePart(`Kolom ${c.label}${c.name ? ' (' + c.name + ')' : ''}`, pr));
   });
   const b = r.bottom;
   const cut = m ? Geo.offsetPolygon(b.pts, b.pts.map(() => m)) : null;
   const bInner = r.t > 0 ? Geo.offsetPolygon(b.pts, r.columns.map(c => -r.t * Math.tan(c.baseBevel / Geo.DEG))) : null;
+  beginPart();
   const bp = polygonPrims(b.pts, b.lengths, b.angles, null, cut, null, bInner);
   noteBelow(bp, 'verstek per rand: ' + r.columns.map(c => `${c.label} ${f1(c.baseBevel)}°`).join(' · '));
   parts.push(makePart('Bodemplaat', bp));
@@ -755,7 +887,7 @@ function toSVG(lay, title) {
   out += '</g>\n<g font-family="Helvetica, Arial, sans-serif" fill="#000">\n';
   lay.prims.forEach(p => {
     if (p.k !== 'text') return;
-    out += `<text x="${r3(p.x)}" y="${r3(p.y)}" font-size="${r3(p.size)}" text-anchor="${p.a}" dominant-baseline="central" stroke="#fff" stroke-width="${r3(p.size * 0.22)}" stroke-linejoin="round" paint-order="stroke"${p.rot ? ` transform="rotate(${r3(-p.rot)} ${r3(p.x)} ${r3(p.y)})"` : ''}${p.title ? ' font-weight="bold"' : ''}>${xmlEsc(p.t)}</text>\n`;
+    out += `<text x="${r3(p.x)}" y="${r3(p.y)}" font-size="${r3(p.size)}" text-anchor="${p.a}" dominant-baseline="central" stroke="#fff" stroke-width="${r3(p.size * 0.22)}" stroke-linejoin="round" paint-order="stroke"${p.rot ? ` transform="rotate(${r3(-p.rot)} ${r3(p.x)} ${r3(p.y)})"` : ''}${p.title || p.letter ? ' font-weight="bold"' : ''}${p.slabNo ? ' fill="#c8c8c8"' : ''}>${xmlEsc(p.t)}</text>\n`;
   });
   return out + '</g>\n</svg>\n';
 }
@@ -817,8 +949,8 @@ function toPDF(lay, paper = 'A4') {
         const w = textWidth(p.t, sz), f = p.a === 'middle' ? 0.5 : p.a === 'end' ? 1 : 0;
         const x0 = X(p.x) - co * w * f + si * 0.35 * sz, y0 = Y(p.y) - si * w * f - co * 0.35 * sz;
         const tm = `${n2(co)} ${n2(si)} ${n2(-si)} ${n2(co)} ${n2(x0)} ${n2(y0)} Tm (${pdfStr(p.t)}) Tj ET\n`;
-        s += `1 1 1 RG ${n2(sz * 0.22)} w [] 0 d 1 j BT 1 Tr /${p.title ? 'F2' : 'F1'} ${n2(sz)} Tf ${tm}`;
-        s += `0 g BT 0 Tr /${p.title ? 'F2' : 'F1'} ${n2(sz)} Tf ${tm}`;
+        s += `1 1 1 RG ${n2(sz * 0.22)} w [] 0 d 1 j BT 1 Tr /${p.title || p.letter ? 'F2' : 'F1'} ${n2(sz)} Tf ${tm}`;
+        s += `${p.slabNo ? '0.78' : '0'} g BT 0 Tr /${p.title || p.letter ? 'F2' : 'F1'} ${n2(sz)} Tf ${tm}`;
       }
     });
     s += 'Q\n';
@@ -833,6 +965,25 @@ function toPDF(lay, paper = 'A4') {
     if (r > 0) s += `${n2(MG * k)} ${n2((PH - MG - OV) * k)} m ${n2((MG + AW) * k)} ${n2((PH - MG - OV) * k)} l S\n` + tx(MG + AW - 42, 6.5, 'overlap met ' + label(r - 1, c) + ' (boven)');
     s += tx(MG, 6.5, `Slab-vaas · blad ${label(r, c)} (${pages.length + 1}/${nx * ny}) · ${ny} rij(en) × ${nx} kolom(men) · ${paper} ${portrait ? 'staand' : 'liggend'} · print op 100 % (werkelijke grootte)`, 8);
     pages.push(s);
+  }
+  // overzichtsblad: welk blad komt waar bij het samenkleven
+  if (nx * ny > 1) {
+    const f = Math.min(AW / (nx * SX + OV), (AH - 25) / (ny * SY + OV)), X0 = MG, Y0 = MG + 18;
+    const Pt = (x, y) => [(X0 + x * f) * k, (PH - (Y0 + y * f)) * k];
+    let o = '1 J 1 j 0.25 G 0.3 w [] 0 d\n';
+    lay.prims.forEach(p => {
+      if (p.k !== 'poly' || (p.s !== 'cut' && p.s !== 'score')) return;
+      o += p.pts.map((q, i) => { const [a, b] = Pt(q[0], q[1]); return `${n2(a)} ${n2(b)} ${i ? 'l' : 'm'}`; }).join('\n') + (p.closed ? ' h' : '') + ' S\n';
+    });
+    for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) {
+      const [x0, y0] = Pt(c * SX, r * SY + AH), w = AW * f * k, h = AH * f * k;
+      o += `0.71 0.4 0.24 RG 1 w ${n2(x0)} ${n2(y0)} ${n2(w)} ${n2(h)} re S\n`;
+      const lab = rowName(r) + (c + 1), sz = Math.max(10, Math.min(28, h / 4));
+      o += `0.71 0.4 0.24 rg BT /F2 ${n2(sz)} Tf ${n2(x0 + w / 2 - textWidth(lab, sz) / 2)} ${n2(y0 + h / 2 - sz * 0.35)} Td (${lab}) Tj ET\n`;
+    }
+    o += `0 g BT /F2 14 Tf ${n2(MG * k)} ${n2((PH - MG - 6) * k)} Td (${pdfStr('Overzicht: ' + nx * ny + ' bladen ' + paper + ' ' + (portrait ? 'staand' : 'liggend') + ' (' + ny + ' rij(en) × ' + nx + ' kolom(men))')}) Tj ET\n`;
+    o += `0.3 g BT /F1 9 Tf ${n2(MG * k)} ${n2((PH - MG - 12) * k)} Td (${pdfStr('Print op 100 %. Leg de bladen zoals hieronder, laat ze 10 mm overlappen en kleef ze samen op de paskruisjes.')}) Tj ET\n`;
+    pages.unshift(o);
   }
   // assemble
   const objs = [];
@@ -902,6 +1053,16 @@ function toHPGL(lay) {
 }
 
 /* ================= Report (platte tekst) ================= */
+function slabLegend(parts) {
+  const ps = parts.filter(p => p.legend); if (!ps.length) return '';
+  const L = ['PER SLAB (nummer en letters zoals op de tekening, maten in cm)'];
+  ps.forEach(p => {
+    L.push('', p.title.toUpperCase());
+    p.legend.sides.forEach(([l, t]) => L.push(`  ${l.padEnd(3)} ${t}`));
+    p.legend.notes.forEach(n => L.push('  ' + n.trim()));
+  });
+  return L.join('\n') + '\n\n——————————————\n\n';
+}
 function report(r) {
   const st = state.settings, s = Geo.shrinkFactor(num(st.krimp));
   const L = [];
@@ -991,7 +1152,7 @@ function update() {
   const parts = state.mode === 'silhouet' ? silParts(r) : secParts(r);
   current = { r, parts };
   renderParts(parts);
-  $('report').textContent = report(r);
+  $('report').textContent = slabLegend(parts) + report(r);
   draw3d();
 }
 
@@ -1001,7 +1162,7 @@ function renderParts(parts) {
   while (box.children.length > parts.length) box.lastChild.remove();
   while (box.children.length < parts.length) {
     const d = document.createElement('div'); d.className = 'part';
-    d.innerHTML = '<h4><span></span><button class="zoom" title="vergroten">⤢ vergroot</button></h4><canvas></canvas>';
+    d.innerHTML = '<h4><span></span><button class="zoom" title="vergroten">⤢ vergroot</button></h4><canvas></canvas><div class="lg"></div>';
     d.addEventListener('click', () => openViewer(+d.dataset.i));
     box.appendChild(d);
   }
@@ -1011,6 +1172,7 @@ function renderParts(parts) {
     el.style.gridColumn = p.bb.w > 2.2 * p.bb.h ? '1 / -1' : '';
     el.querySelector('h4 span').textContent = `${p.title} · ${f2(p.bb.w)} × ${f2(p.bb.h)} cm`;
     drawPart(el.querySelector('canvas'), p);
+    el.querySelector('.lg').innerHTML = legendHTML(p.legend);
   });
   if (viewer.open) drawViewer();
 }
@@ -1037,17 +1199,18 @@ function paintPrims(g, prims, X, Y, sc, o = {}) {
     if (p.k !== 'text' || (p.title && !o.titles)) return;
     const px = Math.min(maxPx, Math.max(minPx, p.size * sc));
     g.save(); g.translate(X(p.x), Y(p.y)); g.rotate(-p.rot / Geo.DEG);
-    const dimLike = /^[\d,]+( open)?$|^h |^lengte |^breedte /.test(p.t);
-    g.font = `${p.title ? '700 ' : dimLike ? '600 ' : ''}${px}px system-ui, -apple-system, sans-serif`;
+    const dimLike = p.letter || /^[\d,]+( open)?$|^h |^lengte |^breedte /.test(p.t);
+    if (p.slabNo) g.globalAlpha = 0.22;
+    g.font = `${p.title || p.letter ? '700 ' : dimLike ? '600 ' : ''}${px}px system-ui, -apple-system, sans-serif`;
     g.textAlign = p.a === 'middle' ? 'center' : p.a === 'end' ? 'right' : 'left'; g.textBaseline = 'middle';
     g.lineWidth = Math.max(3, px * 0.28); g.strokeStyle = 'rgba(255,255,255,.92)'; g.strokeText(p.t, 0, 0);
-    g.fillStyle = dimLike ? '#1d1712' : '#3a322b'; g.fillText(p.t, 0, 0);
-    g.restore();
+    g.fillStyle = p.letter ? '#b5653c' : dimLike ? '#1d1712' : '#3a322b'; g.fillText(p.t, 0, 0);
+    g.restore(); g.globalAlpha = 1;
   });
 }
 function drawPart(cv, part) {
   const dpr = window.devicePixelRatio || 1;
-  const prims = part.prims.filter(p => !p.title), bb = bbox(prims);
+  const prims = part.prims.filter(p => !p.title && !p.legend), bb = bbox(prims);
   const cw = cv.clientWidth || 300;
   const pad = 8, sc = Math.min((cw - 2 * pad) / bb.w, 460 / bb.h);
   const ch = bb.h * sc + 2 * pad;
@@ -1057,6 +1220,14 @@ function drawPart(cv, part) {
   g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, cw, ch);
   const X = x => pad + (x - bb.x0) * sc + (cw - 2 * pad - bb.w * sc) / 2, Y = y => pad + (bb.y1 - y) * sc;
   paintPrims(g, prims, X, Y, sc, { minPx: Math.max(9, Math.min(10.5, sc * 0.9)), maxPx: 15 });
+}
+
+/** Legende van een slab als HTML (scherm). In PDF/SVG staat ze als tekst onder de slab. */
+function legendHTML(lg) {
+  if (!lg) return '';
+  const wide = lg.sides.some(([, t]) => t.length > 12);
+  return `<div class="sides"${wide ? ' style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))"' : ''}>${lg.sides.map(([l, t]) => `<span><b>${l}</b> ${xmlEsc(t)}</span>`).join('')}</div>`
+    + (lg.notes.length ? `<div class="notes">${lg.notes.map(n => xmlEsc(n.trim())).join('<br>')}</div>` : '');
 }
 
 /* ---------- Vergrote weergave (zoomen, slepen, PNG) ---------- */
@@ -1070,7 +1241,7 @@ function openViewer(i) {
 function closeViewer() { viewer.open = false; $('viewer').classList.add('hide'); document.body.style.overflow = ''; }
 function viewerFit() {
   const part = current.parts[viewer.i]; if (!part) return closeViewer();
-  const cv = $('v-canvas'), bb = bbox(part.prims.filter(p => !p.title));
+  const cv = $('v-canvas'), bb = bbox(part.prims.filter(p => !p.title && !p.legend));
   viewer.sc = Math.min(cv.clientWidth / (bb.w + 2), cv.clientHeight / (bb.h + 2));
   viewer.cx = (bb.x0 + bb.x1) / 2; viewer.cy = (bb.y0 + bb.y1) / 2;
   drawViewer();
@@ -1087,8 +1258,10 @@ function drawViewer() {
   g.strokeStyle = '#f1ebe3'; g.lineWidth = 1;
   for (let x = Math.floor((viewer.cx - w / 2 / sc) / step) * step; X(x) < w; x += step) { g.beginPath(); g.moveTo(X(x), 0); g.lineTo(X(x), h); g.stroke(); }
   for (let y = Math.floor((viewer.cy - h / 2 / sc) / step) * step; Y(y) > 0; y += step) { g.beginPath(); g.moveTo(0, Y(y)); g.lineTo(w, Y(y)); g.stroke(); }
-  paintPrims(g, part.prims.filter(p => !p.title), X, Y, sc, { minPx: Math.max(9, Math.min(13, sc * 0.9)), lw: Math.min(2, Math.max(1, sc / 30)) });
+  paintPrims(g, part.prims.filter(p => !p.title && !p.legend), X, Y, sc, { minPx: Math.max(9, Math.min(13, sc * 0.9)), lw: Math.min(2, Math.max(1, sc / 30)) });
   $('v-title').textContent = `${part.title} · ${f2(part.bb.w)} × ${f2(part.bb.h)} cm`;
+  const lg = legendHTML(part.legend);
+  if ($('v-legend').innerHTML !== lg) $('v-legend').innerHTML = lg;
   $('v-scale').textContent = `raster ${step} cm · ${Math.round(sc / 37.8 * 100)} %`;
 }
 function viewerZoom(f, px, py) {
@@ -1248,6 +1421,8 @@ const tablePts = () => (symOn() ? state.sil.sym.half : state.sil.pts);
 function edFit() {
   const cv = $('editor'), pts = state.sil.pts;
   const xs = pts.map(p => p[0]).concat(symOn() ? [-10, 10] : [0, 20]), ys = pts.map(p => p[1]).concat([0, 20]);
+  const S = state.sil.stencil;
+  if (S && S.show) { xs.push(S.x, S.x + S.w); ys.push(S.y, S.y + S.w * S.ar); }
   let x0 = Math.min(...xs) - 3, x1 = Math.max(...xs) + 3, y0 = Math.min(...ys) - 3, y1 = Math.max(...ys) + 3;
   const w = cv.clientWidth, h = cv.clientHeight;
   const sc = Math.min(w / (x1 - x0), h / (y1 - y0));
@@ -1261,6 +1436,12 @@ function edDraw() {
   if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
   if (!ed.view) edFit();
   const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const S = state.sil.stencil, sim = S && S.show ? stencilImage(S.id) : null;
+  if (sim && sim.complete && sim.naturalWidth) {
+    const a = toS([S.x, S.y + S.w * S.ar]);
+    g.globalAlpha = S.op; g.drawImage(sim, a[0], a[1], S.w * ed.view.sc, S.w * S.ar * ed.view.sc); g.globalAlpha = 1;
+    if (ed.stencilMove) { g.strokeStyle = '#2f6fb0'; g.setLineDash([5, 4]); g.lineWidth = 1.5; g.strokeRect(a[0], a[1], S.w * ed.view.sc, S.w * S.ar * ed.view.sc); g.setLineDash([]); }
+  }
   const [wx0, wy1] = toW(0, 0), [wx1, wy0] = toW(w, h);
   const grid = (v0, v1, line, lab) => {
     for (let v = Math.ceil(v0 * 2) / 2; v <= v1; v += 0.5) {
@@ -1312,6 +1493,10 @@ function edPointer() {
   cv.addEventListener('pointerdown', e => {
     const [x, y] = pos(e);
     ed.down = [x, y]; ed.moved = false; ed.drag = null;
+    if (ed.stencilMove && state.sil.stencil) {
+      ed.stDrag = { x0: state.sil.stencil.x, y0: state.sil.stencil.y };
+      cv.setPointerCapture(e.pointerId); return;
+    }
     let best = -1, bd = 16;
     state.sil.pts.forEach((p, i) => {
       const s = toS(p), d = Math.hypot(s[0] - x, s[1] - y);
@@ -1331,6 +1516,11 @@ function edPointer() {
     if (!ed.down) return;
     const [x, y] = pos(e);
     if (Math.hypot(x - ed.down[0], y - ed.down[1]) > 4) ed.moved = true;
+    if (ed.stDrag) {
+      const s = state.sil.stencil;
+      s.x = round1(ed.stDrag.x0 + (x - ed.down[0]) / ed.view.sc); s.y = round1(ed.stDrag.y0 - (y - ed.down[1]) / ed.view.sc);
+      edDraw(); syncStencil(); return;
+    }
     if (ed.drag === null || !ed.moved) return;
     let w = toW(x, y).map(snap);
     if (symOn()) {
@@ -1345,6 +1535,7 @@ function edPointer() {
   });
   const end = e => {
     if (!ed.down) return;
+    if (ed.stDrag) { ed.stDrag = null; ed.down = null; update(); return; }
     const [x, y] = pos(e);
     if (!ed.moved && ed.drag === null) {
       const w = toW(x, y).map(snap), pts = state.sil.pts, n = pts.length;
@@ -1427,6 +1618,90 @@ function deletePoint(i) {
     if (state.sil.open.length) state.sil.open[(i - 1 + state.sil.open.length) % state.sil.open.length] = merged;
   }
   ed.sel = -1; edFit(); edDraw(); renderPtTable(); update();
+}
+
+/* ================= Stencil (afbeelding onder het raster) =================
+   state.sil.stencil = { id, x, y, w, ar, op, show } in cm (x/y = linksonder, ar = hoogte/breedte).
+   De afbeelding zelf staat los van het ontwerp in localStorage ('slabvaas.img.<id>'), zodat ongedaan maken licht blijft. */
+const IMG = 'slabvaas.img.';
+const stencilImgs = {};
+const round1 = v => Math.round(v * 10) / 10;
+function stencilSrc(id) {
+  if (!id) return null;
+  if (stencilImgs[id]) return stencilImgs[id].src;
+  try { return localStorage.getItem(IMG + id); } catch (e) { return null; }
+}
+function stencilImage(id) {
+  if (!id) return null;
+  if (stencilImgs[id]) return stencilImgs[id];
+  const src = stencilSrc(id); if (!src) return null;
+  return stencilStore(id, src, false);
+}
+function stencilStore(id, src, save = true) {
+  const im = new Image(); im.onload = () => { edDraw(); syncStencil(); }; im.src = src; stencilImgs[id] = im;
+  if (save) { try { localStorage.setItem(IMG + id, src); } catch (e) { /* te groot: alleen in het geheugen */ } }
+  return im;
+}
+function stencilCleanup() {
+  // verwijder opgeslagen afbeeldingen die het huidige ontwerp niet meer gebruikt
+  try {
+    const keep = state.sil.stencil && state.sil.stencil.id;
+    Object.keys(localStorage).filter(k => k.startsWith(IMG) && k !== IMG + keep).forEach(k => localStorage.removeItem(k));
+  } catch (e) { /* geen opslag */ }
+}
+async function stencilImport(file) {
+  const url = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error); fr.readAsDataURL(file); });
+  const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('geen geldige afbeelding')); i.src = url; });
+  // verkleinen tot max 1400 px en als JPG op witte achtergrond bewaren (past in de browseropslag)
+  const k = Math.min(1, 1400 / Math.max(im.naturalWidth, im.naturalHeight));
+  const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k));
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  stencilStore(id, c.toDataURL('image/jpeg', 0.85));
+  const ar = c.height / c.width, H = Math.max(20, ...state.sil.pts.map(p => p[1])), w = round1(H / ar);
+  state.sil.stencil = { id, x: symOn() ? round1(-w / 2) : 0, y: 0, w, ar, op: 0.5, show: true };
+  ed.view = null; syncStencil(); edDraw(); update();
+}
+function syncStencil() {
+  const S = state.sil.stencil;
+  $('st-ctl').classList.toggle('hide', !S);
+  $('st-add').textContent = S ? 'Andere afbeelding…' : 'Afbeelding als stencil…';
+  if (!S) { ed.stencilMove = false; $('st-move').checked = false; return; }
+  const set = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = String(v).replace('.', ','); };
+  set('st-w', round1(S.w)); set('st-h', round1(S.w * S.ar)); set('st-x', S.x); set('st-y', S.y);
+  $('st-op').value = S.op; $('st-show').checked = !!S.show;
+  const ok = !!stencilSrc(S.id);
+  $('st-msg').textContent = ok
+    ? 'Zet breedte of hoogte op de echte maat, dan klopt het stencil met het cm-raster. Het stencil wordt niet mee geprint.'
+    : 'De afbeelding van dit stencil is niet meer beschikbaar in deze browser. Laad ze opnieuw.';
+}
+function stencilEvents() {
+  $('st-add').addEventListener('click', () => $('st-file').click());
+  $('st-file').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try { await stencilImport(f); } catch (err) { alert('Kon deze afbeelding niet laden: ' + err.message); }
+  });
+  const S = () => state.sil.stencil;
+  const field = (id, fn) => $(id).addEventListener('input', e => {
+    if (!S()) return; const v = parseFloat(e.target.value.replace(',', '.')); if (!isFinite(v)) return;
+    fn(S(), v); syncStencil(); edDraw(); update();
+  });
+  field('st-w', (s, v) => { if (v > 0) s.w = v; });
+  field('st-h', (s, v) => { if (v > 0) s.w = v / s.ar; });
+  field('st-x', (s, v) => { s.x = v; });
+  field('st-y', (s, v) => { s.y = v; });
+  $('st-op').addEventListener('input', e => { if (!S()) return; S().op = +e.target.value; edDraw(); update(); });
+  $('st-show').addEventListener('change', e => { if (!S()) return; S().show = e.target.checked; edDraw(); update(); });
+  $('st-move').addEventListener('change', e => { ed.stencilMove = e.target.checked; $('editor').style.cursor = ed.stencilMove ? 'move' : ''; });
+  $('st-fit').addEventListener('click', () => {
+    const s = S(); if (!s) return;
+    const ys = state.sil.pts.map(p => p[1]), xs = state.sil.pts.map(p => p[0]);
+    if (ys.length < 2) return;
+    const h = Math.max(...ys) - Math.min(...ys); s.w = round1(h / s.ar); s.y = Math.min(...ys);
+    s.x = round1((Math.min(...xs) + Math.max(...xs)) / 2 - s.w / 2);
+    syncStencil(); ed.view = null; edDraw(); update();
+  });
+  $('st-del').addEventListener('click', () => { state.sil.stencil = null; syncStencil(); ed.view = null; edDraw(); update(); });
 }
 
 /* ================= Modus 2: levels ================= */
@@ -1536,12 +1811,19 @@ function libSaveCurrent() {
   const list = libGet(), ex = list.find(v => v.name.toLowerCase() === name.toLowerCase());
   if (ex && ex.id !== libCurrent && !confirm(`Er bestaat al een vaas “${ex.name}”. Overschrijven?`)) return;
   const item = { id: ex ? ex.id : libId(), name, mode: state.mode, date: new Date().toISOString(),
-    size: libSummary(), thumb: libThumb(), state: JSON.parse(JSON.stringify(state)) };
+    size: libSummary(), thumb: libThumb(), state: JSON.parse(JSON.stringify(state)),
+    stencilSrc: state.sil.stencil ? stencilSrc(state.sil.stencil.id) : null };
   if (!libPut([item].concat(list.filter(v => v !== ex)))) return;
   libCurrent = item.id; $('lib-name').value = name; libRender();
   const btn = $('lib-save'); btn.textContent = 'Bewaard ✓'; setTimeout(() => { btn.textContent = 'Bewaar vaas'; }, 1500);
 }
+function stencilAdopt(obj) {
+  // afbeelding uit een bewaarde vaas of JSON-bestand terugzetten
+  const st = obj.state || obj, S = st && st.sil && st.sil.stencil;
+  if (S && obj.stencilSrc && !stencilSrc(S.id)) stencilStore(S.id, obj.stencilSrc);
+}
 function libOpen(v) {
+  stencilAdopt(v);
   loadState(v.state); libCurrent = v.id; $('lib-name').value = v.name;
   syncInputs(); edDraw(); update(); libRender();
 }
@@ -1591,11 +1873,12 @@ function syncInputs() {
   const s = state.settings;
   $('s-krimp').value = String(s.krimp).replace('.', ',');
   $('s-t').value = String(s.t).replace('.', ',');
-  $('s-ref').value = s.ref; $('s-marge').checked = !!s.marge; $('s-paper').value = s.paper || 'A4';
+  $('s-ref').value = s.ref; $('s-marge').checked = !!s.marge; $('s-paper').value = s.paper || 'A4'; $('s-labels').value = s.labels || 'letters';
   $('s-margecm').value = String(s.margeCm).replace('.', ',');
   $('sil-depth').value = String(state.sil.depth).replace('.', ',');
   $('sil-pieces').checked = !!state.sil.pieces;
   $('sil-joint').value = state.sil.joint;
+  syncStencil();
   $('sec-diamref').value = state.sec.diamRef;
   $('sil-sym').checked = symOn();
   $('sec-sym').checked = !!state.sec.sym;
@@ -1684,6 +1967,17 @@ function init() {
   edPointer();
   setupViewer();
   libEvents();
+  stencilEvents();
+  $('undo').addEventListener('click', () => histGo(-1));
+  $('redo').addEventListener('click', () => histGo(1));
+  document.addEventListener('keydown', e => {
+    if (!(e.metaKey || e.ctrlKey) || e.altKey || viewer.open) return;
+    const k = e.key.toLowerCase(); if (k !== 'z' && k !== 'y') return;
+    const t = e.target;
+    // in een tekstveld werkt de gewone ongedaan-maken van de browser
+    if ((t.tagName === 'INPUT' && /^(text|number|search)$/.test(t.type)) || t.tagName === 'TEXTAREA') return;
+    e.preventDefault(); histGo(k === 'y' || e.shiftKey ? 1 : -1);
+  });
 
   $('copy').addEventListener('click', async () => {
     const txt = $('report').textContent, btn = $('copy');
@@ -1705,15 +1999,16 @@ function init() {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   });
   bind('s-paper', el => { state.settings.paper = el.value; }, 'change');
+  bind('s-labels', el => { state.settings.labels = el.value; }, 'change');
   $('ex-hpgl').addEventListener('click', () => { const l = exportLayout(false); if (l) download(baseName() + '.hpgl', toHPGL(l), 'application/vnd.hp-hpgl'); });
-  $('save-json').addEventListener('click', () => download(baseName() + '.json', JSON.stringify({ app: 'slab-vaas', version: 1, state }, null, 2), 'application/json'));
+  $('save-json').addEventListener('click', () => download(baseName() + '.json', JSON.stringify({ app: 'slab-vaas', version: 1, state, stencilSrc: state.sil.stencil ? stencilSrc(state.sil.stencil.id) : null }, null, 2), 'application/json'));
   $('load-json').addEventListener('click', () => $('file-json').click());
   $('file-json').addEventListener('change', async e => {
     const f = e.target.files[0]; if (!f) return;
     try {
       const obj = JSON.parse(await f.text());
       if (Array.isArray(obj.items)) libImport(obj);
-      else { loadState(obj.state || obj); libCurrent = null; syncInputs(); edDraw(); update(); libRender(); }
+      else { stencilAdopt(obj); loadState(obj.state || obj); libCurrent = null; syncInputs(); edDraw(); update(); libRender(); }
     }
     catch (err) { alert('Kon dit bestand niet lezen: ' + err.message); }
     e.target.value = '';
@@ -1723,6 +2018,7 @@ function init() {
   let rt = 0;
   window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { ed.view = null; edDraw(); update(); if (viewer.open) drawViewer(); }, 150); });
   syncInputs(); edDraw(); update();
+  histCommit(); stencilCleanup();
 }
 init();
 </script>
